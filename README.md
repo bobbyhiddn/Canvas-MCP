@@ -422,9 +422,25 @@ Canvas-MCP/
 │   ├── simple-flow.yaml      # 3-node linear pipeline
 │   ├── decision-tree.yaml    # Branching decision flow
 │   └── ai-pipeline.yaml      # Full hierarchical example
+├── examples/                  # Real-world example recipes (see examples/README.md)
 ├── pyproject.toml
 └── test_render.py
 ```
+
+## Examples
+
+The `examples/` directory contains real-world Canvas-MCP recipes demonstrating the hierarchical format at scale:
+
+- **`rhode-architecture.yaml`** — Full system architecture diagram (4 networks, 7 factories, 20+ nodes, custom container styling)
+- **`concurrency-test.yaml`** — Risk analysis pipeline with fan-out/fan-in pattern
+- **`etymology-factory.yaml`** — Parallel analysis branches converging into a compiled study
+- **`risk-chain.yaml`** — Sequential machines with parallel decision tracks
+- **`network-container-spacing-demo.yaml`** — Multi-factory spacing and nesting demo
+- **`color-codes.yaml`** — Context propagation across container boundaries
+- **`interview-sim.yaml`** — Interview simulation with file I/O nodes
+- **`turing-machine.yaml`** — Document summarization from PDF sources
+
+See [`examples/README.md`](examples/README.md) for full descriptions and rendering instructions.
 
 ## Output
 
