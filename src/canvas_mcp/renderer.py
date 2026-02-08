@@ -67,6 +67,18 @@ def _darken(hex_color: str, factor: float = 0.6) -> str:
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
+def _lighten(hex_color: str, factor: float = 0.3) -> str:
+    """Lighten a hex color by blending toward white.
+
+    factor=0.0 returns the original color, factor=1.0 returns white.
+    """
+    r, g, b = _hex_to_rgb(hex_color)
+    r = int(r + (255 - r) * factor)
+    g = int(g + (255 - g) * factor)
+    b = int(b + (255 - b) * factor)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
 # --- Drawing primitives ---
 
 def _draw_rounded_rect(
@@ -483,8 +495,10 @@ class CanvasRenderer:
             is_vertical = from_port in ("top", "bottom")
 
             # Determine connection color based on source type
+            # Lighten the source color so connectors are clearly visible
+            # against the dark (#11111b) canvas background.
             style = source.get_style()
-            conn_color = _darken(style.border_color, 0.7)
+            conn_color = _lighten(style.border_color, 0.25)
 
             # Draw bezier-like connection using line segments
             self._draw_bezier_connection(
@@ -497,7 +511,7 @@ class CanvasRenderer:
         start: tuple[float, float],
         end: tuple[float, float],
         color: str,
-        width: int = 2,
+        width: int = 3,
         direction: str = "horizontal",
     ):
         """Draw a smooth bezier-like connection between two points.
@@ -547,7 +561,7 @@ class CanvasRenderer:
 
         # Arrowhead at end
         if len(points) >= 2:
-            _draw_arrow(draw, points[-2], points[-1], color=color, width=width, arrow_size=int(8 * self.scale))
+            _draw_arrow(draw, points[-2], points[-1], color=color, width=width, arrow_size=int(14 * self.scale))
 
     def _draw_node(self, draw: ImageDraw.ImageDraw, node: CanvasNode, ox: float, oy: float):
         """Draw a single node."""
