@@ -1,13 +1,13 @@
 # Canvas-MCP
 
-MCP server for creating Thoughtorio-style canvas diagrams as PNGs.
+MCP server for creating hierarchical canvas diagrams as PNGs.
 
 ## Architecture
 
 - **`src/canvas_mcp/models.py`** — Ontology: Canvas > Network > Factory > Machine > Node, plus NodeStyle and ContainerStyle
-- **`src/canvas_mcp/parser.py`** — YAML recipe parser (supports Thoughtorio format + simplified format)
+- **`src/canvas_mcp/parser.py`** — YAML recipe parser (supports hierarchical format + simplified format)
 - **`src/canvas_mcp/renderer.py`** — Pillow-based PNG renderer with Catppuccin dark theme
-- **`src/canvas_mcp/organize.py`** — Thoughtorio layout algorithm (topological sort + parent-center alignment)
+- **`src/canvas_mcp/organize.py`** — Hierarchical layout algorithm (topological sort + parent-center alignment)
 - **`src/canvas_mcp/server.py`** — MCP server with tools: `render_canvas`, `create_canvas`, `list_templates`, `get_template`
 - **`templates/`** — Starter recipe templates
 
@@ -57,7 +57,7 @@ nodes:
     inputs: [start]
 ```
 
-### Thoughtorio-compatible (explicit coordinates)
+### Hierarchical (explicit coordinates)
 ```yaml
 canvas:
   version: "2.0"

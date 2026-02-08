@@ -1,12 +1,12 @@
 # Canvas-MCP
 
-An MCP server that renders Thoughtorio-style canvas diagrams as PNGs. Define your system as a hierarchy of **networks**, **factories**, **machines**, and **nodes** — Canvas-MCP handles layout, styling, and rendering.
+An MCP server that renders hierarchical canvas diagrams as PNGs. Define your system as a hierarchy of **networks**, **factories**, **machines**, and **nodes** — Canvas-MCP handles layout, styling, and rendering.
 
 Built with Python, Pillow, and the [Model Context Protocol](https://modelcontextprotocol.io).
 
 ## The Ontology
 
-Canvas-MCP uses a **four-level hierarchical ontology** inspired by [Thoughtorio](https://github.com/bobbyhiddn/Thoughtorio). Every diagram is a tree of nested containers, from the broadest scope down to the atomic unit:
+Canvas-MCP uses a **four-level hierarchical ontology**. Every diagram is a tree of nested containers, from the broadest scope down to the atomic unit:
 
 ```
 Canvas
@@ -211,11 +211,11 @@ nodes:
     inputs: [analyze]
 ```
 
-**Auto-layout**: When all node coordinates are `(0, 0)` (or omitted), Canvas-MCP arranges them automatically. Use the `organize` flag for Thoughtorio's intelligent topological layout.
+**Auto-layout**: When all node coordinates are `(0, 0)` (or omitted), Canvas-MCP arranges them automatically. Use the `organize` flag for intelligent topological layout.
 
 **Auto-machines**: Connected components of nodes are automatically grouped into machines.
 
-### Thoughtorio Format
+### Hierarchical Format
 
 The full format gives you explicit control over the entire hierarchy:
 
@@ -291,7 +291,7 @@ canvas:
 
 ## Layout System
 
-Canvas-MCP includes a layout engine ported from Thoughtorio's organize algorithm.
+Canvas-MCP includes a built-in topological layout engine.
 
 ### Auto-Layout
 
@@ -302,7 +302,7 @@ When all nodes have coordinates at `(0, 0)`, the basic auto-layout arranges them
 
 ### Organize Algorithm
 
-Enable with `organize: true` for Thoughtorio's intelligent layout:
+Enable with `organize: true` for intelligent hierarchical layout:
 
 1. **Topological sort** (Kahn's algorithm) assigns hierarchical levels
 2. **Parent-center alignment** vertically centers children on their parents
@@ -346,10 +346,10 @@ Render a YAML recipe string to PNG.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `yaml_recipe` | string | required | YAML in simplified or Thoughtorio format |
+| `yaml_recipe` | string | required | YAML in simplified or hierarchical format |
 | `scale` | number | `2.0` | Render scale (2.0 = crisp retina output) |
 | `filename` | string | auto-UUID | Output filename (without extension) |
-| `organize` | boolean | `false` | Apply Thoughtorio layout algorithm |
+| `organize` | boolean | `false` | Apply hierarchical layout algorithm |
 | `spacing_level` | string | `"container"` | One of: `node`, `container`, `network` |
 
 ### `create_canvas`
@@ -414,14 +414,14 @@ uv run python test_render.py   # Renders test PNGs to output/
 Canvas-MCP/
 ├── src/canvas_mcp/
 │   ├── models.py       # Ontology: Canvas > Network > Factory > Machine > Node
-│   ├── parser.py       # YAML parser (simplified + Thoughtorio formats)
+│   ├── parser.py       # YAML parser (simplified + hierarchical formats)
 │   ├── renderer.py     # Pillow-based PNG renderer
-│   ├── organize.py     # Thoughtorio layout algorithm (topological sort)
+│   ├── organize.py     # Hierarchical layout algorithm (topological sort)
 │   └── server.py       # MCP server with 4 tools
 ├── templates/
 │   ├── simple-flow.yaml      # 3-node linear pipeline
 │   ├── decision-tree.yaml    # Branching decision flow
-│   └── ai-pipeline.yaml      # Full Thoughtorio hierarchy
+│   └── ai-pipeline.yaml      # Full hierarchical example
 ├── pyproject.toml
 └── test_render.py
 ```

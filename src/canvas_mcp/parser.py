@@ -1,7 +1,7 @@
 """YAML recipe parser for Canvas-MCP.
 
 Supports two formats:
-1. Thoughtorio-compatible full canvas YAML (with networks/factories/machines)
+1. Hierarchical full canvas YAML (with networks/factories/machines)
 2. Simplified recipe format (flat list of nodes + connections)
 """
 
@@ -27,9 +27,9 @@ def parse_yaml(yaml_str: str) -> Canvas:
     if not data:
         raise ValueError("Empty YAML input")
 
-    # Check if it's a Thoughtorio-format canvas
+    # Check if it's a hierarchical-format canvas
     if "canvas" in data:
-        return _parse_thoughtorio_format(data["canvas"])
+        return _parse_hierarchical_format(data["canvas"])
 
     # Otherwise, treat as simplified format
     return _parse_simple_format(data)
@@ -41,8 +41,8 @@ def parse_file(path: str) -> Canvas:
     return parse_yaml(content)
 
 
-def _parse_thoughtorio_format(data: dict) -> Canvas:
-    """Parse Thoughtorio's native canvas YAML format."""
+def _parse_hierarchical_format(data: dict) -> Canvas:
+    """Parse the hierarchical canvas YAML format (networks/factories/machines/nodes)."""
     canvas = Canvas(
         version=data.get("version", "2.0"),
         title=data.get("title", "Untitled Canvas"),

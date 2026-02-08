@@ -1,5 +1,5 @@
 """
-Data models for Canvas-MCP — the Thoughtorio ontology.
+Data models for Canvas-MCP — the canvas ontology.
 
 The Canvas ontology is a four-level hierarchy that models visual computation
 as nested containers of increasing specificity:
@@ -82,7 +82,7 @@ class ContainerStyle(BaseModel):
     border_width: Optional[int] = None
 
 
-# Default styles per node type (Thoughtorio / Catppuccin Mocha palette)
+# Default styles per node type (Catppuccin Mocha palette)
 NODE_STYLES: dict[str, NodeStyle] = {
     "input":    NodeStyle(border_color="#2196F3"),  # Blue
     "output":   NodeStyle(border_color="#FFC107"),  # Amber
@@ -178,7 +178,7 @@ class CanvasMachine(BaseModel):
 
     In the simplified YAML format, machines are auto-detected from node
     connectivity — each connected component of nodes becomes a machine.
-    In the full Thoughtorio format, machines are declared explicitly.
+    In the full hierarchical format, machines are declared explicitly.
 
     Visual Appearance
     -----------------

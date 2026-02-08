@@ -51,13 +51,13 @@ output3 = Path("/home/bobbyhiddn/Code/Canvas-MCP/output/test-decision.png")
 renderer.render(canvas3, output_path=str(output3))
 print(f"[OK] Decision tree rendered: {output3} ({output3.stat().st_size} bytes)")
 
-# Test 4: Thoughtorio example
+# Test 4: Full hierarchical format (via ai-pipeline template)
 try:
-    canvas4 = parse_file("/home/bobbyhiddn/Code/Thoughtorio/examples/Color-Codes.yml")
-    output4 = Path("/home/bobbyhiddn/Code/Canvas-MCP/output/test-thoughtorio.png")
-    renderer.render(canvas4, output_path=str(output4))
-    print(f"[OK] Thoughtorio Color-Codes rendered: {output4} ({output4.stat().st_size} bytes)")
+    canvas4 = parse_file("/home/bobbyhiddn/Code/Canvas-MCP/templates/ai-pipeline.yaml")
+    output4 = Path("/home/bobbyhiddn/Code/Canvas-MCP/output/test-hierarchical.png")
+    renderer.render(canvas4, output_path=str(output4), organize=True)
+    print(f"[OK] Hierarchical pipeline rendered: {output4} ({output4.stat().st_size} bytes)")
 except Exception as e:
-    print(f"[SKIP] Thoughtorio Color-Codes: {e}")
+    print(f"[SKIP] Hierarchical pipeline: {e}")
 
 print("\nAll tests passed!")

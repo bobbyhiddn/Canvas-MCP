@@ -1,6 +1,6 @@
 """Test the hierarchical organize system with a Rhode architecture diagram.
 
-Ontology rules (from Thoughtorio):
+Canvas-MCP ontology rules:
   - Machine = connected component of nodes (nodes with direct edges between them)
   - Factory = machines connected by explicit cross-machine edges
   - Network = factories connected by explicit cross-factory edges
@@ -18,7 +18,7 @@ from canvas_mcp.renderer import CanvasRenderer
 
 
 def build_rhode_canvas() -> Canvas:
-    """Build Rhode architecture following Thoughtorio ontology rules.
+    """Build Rhode architecture following Canvas-MCP ontology rules.
 
     The key insight: factories are defined by connectivity, not by category.
     Machines in the same factory MUST have explicit cross-machine connections.
@@ -125,7 +125,7 @@ def build_rhode_canvas() -> Canvas:
     # =================================================================
     canvas_mcp = CanvasNode(
         id="canvas-mcp", type="source", label="Canvas MCP",
-        content="Thoughtorio-style diagram renderer",
+        content="Hierarchical canvas diagram renderer",
         inputs=["agent"],
         outputs=["send-photo"],
     )

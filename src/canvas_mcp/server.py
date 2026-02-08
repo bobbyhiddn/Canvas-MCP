@@ -1,4 +1,4 @@
-"""Canvas-MCP server — MCP tools for creating Thoughtorio-style canvas diagrams."""
+"""Canvas-MCP server — MCP tools for creating hierarchical canvas diagrams."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ async def list_tools() -> list[Tool]:
             name="render_canvas",
             description=(
                 "Render a canvas diagram from a YAML recipe string. "
-                "Supports Thoughtorio-compatible format (networks/factories/machines/nodes) "
+                "Supports hierarchical format (networks/factories/machines/nodes) "
                 "or a simplified format (flat list of nodes with inputs/outputs). "
                 "Returns the path to the rendered PNG file."
             ),
@@ -73,7 +73,7 @@ async def list_tools() -> list[Tool]:
                     "organize": {
                         "type": "boolean",
                         "description": (
-                            "Apply Thoughtorio's hierarchical organize algorithm for "
+                            "Apply the hierarchical organize algorithm for "
                             "automatic layout with proper breathing room. Organizes nodes "
                             "within machines, machines within factories, factories within "
                             "networks — each with appropriate spacing. Default: true."
@@ -165,7 +165,7 @@ async def list_tools() -> list[Tool]:
                     "organize": {
                         "type": "boolean",
                         "description": (
-                            "Apply Thoughtorio's organize algorithm for automatic layout. Default: true."
+                            "Apply the organize algorithm for automatic layout. Default: true."
                         ),
                         "default": True,
                     },
@@ -418,15 +418,6 @@ async def _list_templates(args: dict) -> list[TextContent]:
                 "path": str(f),
             })
 
-    # Also list Thoughtorio examples as templates
-    thoughtorio_examples = Path.home() / "Code" / "Thoughtorio" / "examples"
-    if thoughtorio_examples.exists():
-        for f in sorted(thoughtorio_examples.glob("*.yaml")) + sorted(thoughtorio_examples.glob("*.yml")):
-            templates.append({
-                "name": f"thoughtorio/{f.stem}",
-                "path": str(f),
-            })
-
     return [TextContent(
         type="text",
         text=json.dumps({"templates": templates}),
@@ -442,15 +433,6 @@ async def _get_template(args: dict) -> list[TextContent]:
         path = TEMPLATES_DIR / f"{name}{ext}"
         if path.exists():
             return [TextContent(type="text", text=path.read_text())]
-
-    # Check Thoughtorio examples
-    if name.startswith("thoughtorio/"):
-        real_name = name[len("thoughtorio/"):]
-        thoughtorio_examples = Path.home() / "Code" / "Thoughtorio" / "examples"
-        for ext in [".yaml", ".yml"]:
-            path = thoughtorio_examples / f"{real_name}{ext}"
-            if path.exists():
-                return [TextContent(type="text", text=path.read_text())]
 
     return [TextContent(type="text", text=f"Template not found: {name}")]
 

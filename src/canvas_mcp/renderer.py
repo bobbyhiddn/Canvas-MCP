@@ -1,4 +1,4 @@
-"""Canvas renderer using Pillow — produces Thoughtorio-style PNG diagrams."""
+"""Canvas renderer using Pillow — produces hierarchical canvas PNG diagrams."""
 
 from __future__ import annotations
 
@@ -288,7 +288,7 @@ class CanvasRenderer:
         Args:
             canvas: The canvas to render.
             output_path: Optional path to save the PNG.
-            organize: If True, apply Thoughtorio's organize algorithm for
+            organize: If True, apply the hierarchical organize algorithm for
                       automatic layout with breathing room.
             spacing_level: Spacing level for organize ("node", "container", "network").
             orientation: Layout direction — "horizontal" or "vertical" (top→bottom).
@@ -296,7 +296,7 @@ class CanvasRenderer:
         # Auto-size nodes to fit their text content BEFORE layout
         self.auto_size_nodes(canvas)
 
-        # Auto-layout: always use Thoughtorio hierarchical organize by default.
+        # Auto-layout: always use hierarchical organize by default.
         # The simple fallback only applies when organize is explicitly disabled
         # AND all nodes happen to be at (0,0).
         if organize:
@@ -544,7 +544,7 @@ class CanvasRenderer:
     ) -> tuple[float, float]:
         """Get the anchor point coordinates for a given port on a node.
 
-        Matches Thoughtorio's getPortCoordinates() logic:
+        Port coordinate mapping:
             input   → left edge, vertical center
             output  → right edge, vertical center
             top     → top edge, horizontal center
@@ -574,8 +574,7 @@ class CanvasRenderer:
         Port selection is emergent from node geometry — if a target node
         sits below a certain horizon from its source, the connection
         automatically switches from side ports (horizontal tree) to
-        top/bottom ports (vertical tree).  This is ported from
-        Thoughtorio's ConnectionLine.svelte port logic.
+        top/bottom ports (vertical tree).
         """
         for source_id, target_id in canvas.all_connections():
             source = canvas.get_node(source_id)
@@ -615,8 +614,7 @@ class CanvasRenderer:
     ):
         """Draw a smooth bezier-like connection between two points.
 
-        Supports both horizontal and vertical flow directions, matching
-        Thoughtorio's ConnectionLine.svelte control point logic:
+        Supports both horizontal and vertical flow directions:
           - horizontal: control points extend left/right (S-curve)
           - vertical:   control points extend up/down (S-curve)
         """

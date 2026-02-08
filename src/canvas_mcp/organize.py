@@ -1,8 +1,8 @@
 """
-Thoughtorio-style organize algorithm for Canvas-MCP.
+Hierarchical organize algorithm for Canvas-MCP.
 
-Ported from Thoughtorio's organize.js — topological layout with intelligent
-parent-child alignment, overlap prevention, and hierarchical spacing.
+Topological layout with intelligent parent-child alignment, overlap
+prevention, and hierarchical spacing.
 
 The key feature that distinguishes this from a flat layout is **hierarchical
 application**: the organize algorithm runs at three levels:
@@ -21,7 +21,7 @@ checks whether any node's bounding box overlaps with a bezier connector
 path that doesn't involve that node. Overlapping nodes are nudged
 vertically to keep connector paths unobstructed.
 
-Spacing constants scaled up from Thoughtorio for larger, more legible nodes:
+Spacing constants:
   - Nodes within machines: 90px horizontal, 140px vertical
   - Containers (machines/factories): 200px horizontal, 240px vertical
   - Networks: 260px horizontal, 320px vertical
@@ -36,7 +36,7 @@ from typing import Optional
 from .models import Canvas, CanvasNode, CanvasMachine, CanvasFactory, CanvasNetwork
 
 
-# --- Spacing constants (from Thoughtorio) ---
+# --- Spacing constants ---
 
 NODE_HORIZONTAL_SPACING = 90
 NODE_VERTICAL_SPACING = 140
@@ -77,7 +77,7 @@ class OrganizeEdge:
 
 @dataclass
 class OrganizeOptions:
-    """Layout options matching Thoughtorio's OrganizeOptions."""
+    """Layout options for the organize algorithm."""
     orientation: str = "horizontal"  # 'horizontal' or 'vertical'
     horizontal_spacing: float = NODE_HORIZONTAL_SPACING
     vertical_spacing: float = NODE_VERTICAL_SPACING
@@ -105,7 +105,7 @@ class ContainerBounds:
 
 
 # ---------------------------------------------------------------------------
-# Core layout algorithm (unchanged from Thoughtorio port)
+# Core layout algorithm
 # ---------------------------------------------------------------------------
 
 def compute_organized_layout(
@@ -114,7 +114,7 @@ def compute_organized_layout(
     options: Optional[OrganizeOptions] = None,
 ) -> dict[str, LayoutPosition]:
     """
-    Core organize algorithm -- port of Thoughtorio's computeOrganizedLayout().
+    Core organize algorithm — topological sort with parent-center alignment.
 
     Steps:
     1. Build adjacency and indegree maps
@@ -325,14 +325,13 @@ def compute_organized_layout(
 
 
 # ---------------------------------------------------------------------------
-# Bounds computation (from Thoughtorio's computeBoundsFromNodeIds)
+# Bounds computation
 # ---------------------------------------------------------------------------
 
 def compute_bounds_from_nodes(nodes: list[CanvasNode]) -> Optional[ContainerBounds]:
     """Compute the bounding box of a set of nodes.
 
     Returns None if there are no nodes or coordinates are not finite.
-    Matches Thoughtorio's computeBoundsFromNodeIds().
     """
     if not nodes:
         return None
@@ -378,7 +377,7 @@ def _resolve_edges_for_containers(
     produces an edge machine-1 -> machine-2. Self-edges (same container)
     are excluded. Duplicates are deduplicated.
 
-    Matches Thoughtorio's buildEdgesForOrganize() + resolveOrganizeEntity().
+    Deduplicates and excludes self-edges.
     """
     seen: set[tuple[str, str]] = set()
     edges: list[OrganizeEdge] = []
@@ -404,7 +403,7 @@ def _resolve_edges_for_containers(
 
 
 # ---------------------------------------------------------------------------
-# Hierarchical organize (the real Thoughtorio approach)
+# Hierarchical organize
 # ---------------------------------------------------------------------------
 
 def _organize_machine(
@@ -415,8 +414,6 @@ def _organize_machine(
     orientation: str = "horizontal",
 ) -> Optional[ContainerBounds]:
     """Organize nodes within a single machine.
-
-    Matches Thoughtorio's buildMachineOrganizeContext() + layout application.
 
     Returns the computed bounds of the machine after layout, or None if empty.
     """
@@ -478,8 +475,6 @@ def _organize_factory(
 
     First organizes nodes within each machine (bottom-up), then positions
     machines relative to each other using container-level edges.
-
-    Matches Thoughtorio's buildFactoryOrganizeContext().
 
     Returns the computed bounds of the factory after layout, or None if empty.
     """
@@ -589,8 +584,6 @@ def _organize_network(
     First organizes machines within each factory (which in turn organizes
     nodes within each machine), then positions factories relative to each
     other using container-level edges.
-
-    Matches Thoughtorio's buildNetworkOrganizeContext().
 
     Returns the computed bounds of the network after layout, or None if empty.
     """
@@ -1022,10 +1015,10 @@ def organize_canvas(
     orientation: str = "horizontal",
 ) -> None:
     """
-    Apply Thoughtorio's hierarchical organize algorithm to an entire Canvas,
+    Apply the hierarchical organize algorithm to an entire Canvas,
     repositioning nodes in-place.
 
-    This is the HIERARCHICAL version that matches Thoughtorio's actual behavior:
+    The hierarchical system works bottom-up:
     1. Nodes are organized within each machine (node-level spacing)
     2. Machines are organized within each factory (container-level spacing)
     3. Factories are organized within each network (network-level spacing)
