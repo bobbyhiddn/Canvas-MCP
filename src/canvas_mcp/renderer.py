@@ -175,6 +175,16 @@ class CanvasRenderer:
     CONTAINER_PADDING = 45
     CONTAINER_LABEL_HEIGHT = 40
 
+    # Node sizing constants
+    MIN_NODE_WIDTH = 180
+    MIN_NODE_HEIGHT = 80
+    MAX_NODE_WIDTH = 600
+    NODE_TOP_BAR = 6        # colored indicator bar at top
+    NODE_LABEL_GAP = 12     # gap between bar and label
+    NODE_CONTENT_GAP = 10   # gap between label and content
+    NODE_BOTTOM_PAD = 36    # room for type badge + padding at bottom
+    NODE_LINE_HEIGHT = 24   # line height for body text
+
     def __init__(self, scale: float = 1.0):
         self.scale = scale
         self.font_body = _load_font(int(18 * scale))
@@ -182,6 +192,88 @@ class CanvasRenderer:
         self.font_title = _load_bold_font(int(28 * scale))
         self.font_container = _load_bold_font(int(16 * scale))
         self.font_small = _load_font(int(14 * scale))
+
+    def compute_node_size(self, node: CanvasNode) -> tuple[float, float]:
+        """Measure the required width and height for a node based on its text.
+
+        Returns (width, height) in unscaled canvas coordinates.  The node's
+        ``width`` and ``height`` attributes are NOT modified — the caller
+        decides whether to apply the computed values.
+
+        Layout breakdown (top to bottom):
+            NODE_TOP_BAR          — colored indicator bar
+            NODE_LABEL_GAP        — gap below bar
+            label text height     — single line, bold font
+            NODE_CONTENT_GAP      — gap between label and content
+            content text lines    — wrapped body text
+            NODE_BOTTOM_PAD       — room for type badge + breathing room
+        """
+        padding = self.NODE_PADDING
+        line_height = self.NODE_LINE_HEIGHT
+
+        # --- Width ---
+        # Start from label width
+        label = node.get_label()
+        label_bbox = self.font_label.getbbox(label)
+        label_width = label_bbox[2] - label_bbox[0]
+
+        # Determine available text width: we want at least label_width,
+        # but also consider content lines. Use a target width for wrapping:
+        # prefer the larger of label width and a comfortable content width.
+        # We'll also measure the type badge to make sure it fits.
+        type_text = node.type
+        type_bbox = self.font_small.getbbox(type_text)
+        type_badge_w = type_bbox[2] - type_bbox[0] + 12 + 10  # badge + right margin
+
+        # Content measurement: wrap at a reasonable width and check
+        content_width = 0
+        content_lines: list[str] = []
+        if node.content:
+            # First pass: use a generous wrap width to measure natural line widths
+            # Then compute actual required width
+            max_wrap = self.MAX_NODE_WIDTH - 2 * padding
+            content_lines = _wrap_text(node.content, self.font_body, max_wrap)
+            for line in content_lines:
+                lbbox = self.font_body.getbbox(line)
+                lw = lbbox[2] - lbbox[0]
+                content_width = max(content_width, lw)
+
+        # Final width: max of label, content, type badge, all + padding
+        inner_width = max(label_width, content_width, type_badge_w)
+        width = inner_width + 2 * padding
+        width = max(width, self.MIN_NODE_WIDTH)
+        width = min(width, self.MAX_NODE_WIDTH)
+
+        # --- Height ---
+        label_bbox_h = label_bbox[3] - label_bbox[1]
+        height = (
+            self.NODE_TOP_BAR
+            + self.NODE_LABEL_GAP
+            + label_bbox_h
+            + self.NODE_CONTENT_GAP
+        )
+
+        # Re-wrap content at actual available width (may differ from first pass)
+        if node.content:
+            actual_text_width = width - 2 * padding
+            content_lines = _wrap_text(node.content, self.font_body, int(actual_text_width))
+            height += len(content_lines) * line_height
+
+        height += self.NODE_BOTTOM_PAD
+        height = max(height, self.MIN_NODE_HEIGHT)
+
+        return (float(round(width)), float(round(height)))
+
+    def auto_size_nodes(self, canvas: Canvas) -> None:
+        """Measure all nodes and update their width/height to fit their text.
+
+        This should be called BEFORE layout (organize or auto-layout) so the
+        layout algorithm uses correct node dimensions for spacing.
+        """
+        for node in canvas.all_nodes():
+            w, h = self.compute_node_size(node)
+            node.width = w
+            node.height = h
 
     def render(
         self,
@@ -201,6 +293,9 @@ class CanvasRenderer:
             spacing_level: Spacing level for organize ("node", "container", "network").
             orientation: Layout direction — "horizontal" or "vertical" (top→bottom).
         """
+        # Auto-size nodes to fit their text content BEFORE layout
+        self.auto_size_nodes(canvas)
+
         # Auto-layout: always use Thoughtorio hierarchical organize by default.
         # The simple fallback only applies when organize is explicitly disabled
         # AND all nodes happen to be at (0,0).
@@ -568,7 +663,11 @@ class CanvasRenderer:
             _draw_arrow(draw, points[-2], points[-1], color=color, width=width, arrow_size=int(18 * self.scale))
 
     def _draw_node(self, draw: ImageDraw.ImageDraw, node: CanvasNode, ox: float, oy: float):
-        """Draw a single node."""
+        """Draw a single node.
+
+        Text positioning uses the same constants as ``compute_node_size``
+        so auto-sized nodes always have room for their content.
+        """
         style = node.get_style()
 
         x = (node.x + ox) * self.scale
@@ -576,51 +675,56 @@ class CanvasRenderer:
         w = node.width * self.scale
         h = node.height * self.scale
 
+        s = self.scale  # shorthand
+
         # Node background
         _draw_rounded_rect(
             draw, (x, y, x + w, y + h),
-            radius=int(style.corner_radius * self.scale),
+            radius=int(style.corner_radius * s),
             fill=style.fill_color,
             outline=style.border_color,
-            width=int(style.border_width * self.scale),
+            width=int(style.border_width * s),
         )
 
         # Node type indicator bar at top
-        bar_height = int(6 * self.scale)
+        bar_height = int(self.NODE_TOP_BAR * s)
         _draw_rounded_rect(
             draw,
             (x + 2, y + 2, x + w - 2, y + bar_height + 2),
-            radius=int(style.corner_radius * self.scale),
+            radius=int(style.corner_radius * s),
             fill=style.border_color,
         )
 
-        # Label
+        # Label — positioned consistently with compute_node_size
         label = node.get_label()
-        label_y = y + bar_height + int(12 * self.scale)
+        label_y = y + bar_height + int(self.NODE_LABEL_GAP * s)
         draw.text(
-            (x + int(self.NODE_PADDING * self.scale), label_y),
+            (x + int(self.NODE_PADDING * s), label_y),
             label,
             fill=style.label_color or "#cdd6f4",
             font=self.font_label,
         )
 
-        # Content text (wrapped)
-        content_y = label_y + int(30 * self.scale)
-        max_text_width = int(w - 2 * self.NODE_PADDING * self.scale)
+        # Content text (wrapped) — positioned consistently with compute_node_size
+        label_bbox = self.font_label.getbbox(label)
+        label_text_h = label_bbox[3] - label_bbox[1]
+        content_y = label_y + label_text_h + int(self.NODE_CONTENT_GAP * s)
+        max_text_width = int(w - 2 * self.NODE_PADDING * s)
+        line_height = int(self.NODE_LINE_HEIGHT * s)
+
         if node.content:
             lines = _wrap_text(node.content, self.font_body, max_text_width)
-            # Limit to what fits in the node
-            line_height = int(24 * self.scale)
-            max_lines = int((h - (content_y - y) - 14 * self.scale) / line_height)
-            if max_lines < 1:
-                max_lines = 1
+            # With auto-sizing, all lines should fit. But add a safety limit
+            # in case the node was manually sized smaller.
+            available_h = h - (content_y - y) - int(self.NODE_BOTTOM_PAD * s)
+            max_lines = max(1, int(available_h / line_height)) if available_h > 0 else 1
             display_lines = lines[:max_lines]
             if len(lines) > max_lines:
                 display_lines[-1] = display_lines[-1][:20] + "..."
 
             for i, line in enumerate(display_lines):
                 draw.text(
-                    (x + int(self.NODE_PADDING * self.scale), content_y + i * line_height),
+                    (x + int(self.NODE_PADDING * s), content_y + i * line_height),
                     line,
                     fill="#a6adc8",
                     font=self.font_body,
@@ -631,8 +735,8 @@ class CanvasRenderer:
         type_bbox = self.font_small.getbbox(type_text)
         type_w = type_bbox[2] - type_bbox[0] + 12
         type_h = type_bbox[3] - type_bbox[1] + 6
-        type_x = x + w - type_w - int(10 * self.scale)
-        type_y = y + h - type_h - int(10 * self.scale)
+        type_x = x + w - type_w - int(10 * s)
+        type_y = y + h - type_h - int(10 * s)
 
         _draw_rounded_rect(
             draw, (type_x, type_y, type_x + type_w, type_y + type_h),
