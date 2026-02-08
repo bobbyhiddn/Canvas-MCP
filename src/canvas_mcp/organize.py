@@ -528,13 +528,21 @@ def _organize_factory(
         return None
 
     # --- Step 5: Layout machines within the factory ---
+    # When machines have no cross-machine edges, stack them all in a single
+    # column (horizontal) or row (vertical) instead of using a grid.
+    # This prevents disconnected machines from being split across
+    # multiple columns/rows, which looks like stacking/overlapping.
+    effective_grid_columns = (
+        len(items) if not container_edges else GRID_COLUMNS_CONTAINER
+    )
+
     options = OrganizeOptions(
         orientation=orientation,
         horizontal_spacing=CONTAINER_HORIZONTAL_SPACING,
         vertical_spacing=CONTAINER_VERTICAL_SPACING,
         start_x=start_x + FACTORY_PADDING,
         start_y=start_y + FACTORY_PADDING,
-        grid_columns=GRID_COLUMNS_CONTAINER,
+        grid_columns=effective_grid_columns,
     )
 
     layout = compute_organized_layout(items, container_edges, options)
@@ -647,13 +655,19 @@ def _organize_network(
         return None
 
     # --- Step 5: Layout factories within the network ---
+    # Same grid-column logic as _organize_factory: when factories have no
+    # cross-factory edges, keep them all in a single column/row.
+    effective_grid_columns = (
+        len(items) if not container_edges else GRID_COLUMNS_CONTAINER
+    )
+
     options = OrganizeOptions(
         orientation=orientation,
         horizontal_spacing=NETWORK_HORIZONTAL_SPACING,
         vertical_spacing=NETWORK_VERTICAL_SPACING,
         start_x=start_x + NETWORK_PADDING,
         start_y=start_y + NETWORK_PADDING,
-        grid_columns=GRID_COLUMNS_CONTAINER,
+        grid_columns=effective_grid_columns,
     )
 
     layout = compute_organized_layout(items, container_edges, options)
@@ -685,6 +699,20 @@ def _organize_network(
 # Public API
 # ---------------------------------------------------------------------------
 
+def _get_all_network_nodes(network: CanvasNetwork) -> list[CanvasNode]:
+    """Collect all nodes from a network."""
+    nodes = []
+    for factory in network.factories:
+        for machine in factory.machines:
+            nodes.extend(machine.nodes)
+    return nodes
+
+
+# Spacing between networks at the top level (generous to separate systems)
+INTER_NETWORK_HORIZONTAL_SPACING = 250
+INTER_NETWORK_VERTICAL_SPACING = 300
+
+
 def organize_canvas(
     canvas: Canvas,
     spacing_level: str = "container",
@@ -698,6 +726,7 @@ def organize_canvas(
     1. Nodes are organized within each machine (node-level spacing)
     2. Machines are organized within each factory (container-level spacing)
     3. Factories are organized within each network (network-level spacing)
+    4. Networks are positioned relative to each other (inter-network spacing)
 
     At each level, child containers are treated as single items with bounds
     computed from their contents. Cross-container connections are resolved
@@ -723,5 +752,96 @@ def organize_canvas(
     start_x = 80
     start_y = 100
 
+    # --- Step 1: Organize each network internally at origin (0, 0) ---
+    # We organize each network at a temporary origin first, then position
+    # them relative to each other in Step 2.
+    network_bounds: dict[str, ContainerBounds] = {}
     for network in canvas.networks:
-        _organize_network(network, all_connections, start_x, start_y, orientation=orientation)
+        _organize_network(network, all_connections, 0, 0, orientation=orientation)
+        net_nodes = _get_all_network_nodes(network)
+        if net_nodes:
+            bounds = compute_bounds_from_nodes(net_nodes)
+            if bounds:
+                network_bounds[network.id] = bounds
+
+    # --- Step 2: Position networks relative to each other ---
+    if len(canvas.networks) <= 1:
+        # Single network — just translate to start position
+        if canvas.networks:
+            net = canvas.networks[0]
+            net_nodes = _get_all_network_nodes(net)
+            if net_nodes:
+                bounds = network_bounds.get(net.id)
+                if bounds:
+                    dx = start_x - bounds.x
+                    dy = start_y - bounds.y
+                    for node in net_nodes:
+                        node.x += dx
+                        node.y += dy
+        return
+
+    # Multiple networks: build network-level organize items and use the
+    # same topological layout algorithm to position them.
+    node_to_network: dict[str, str] = {}
+    for network in canvas.networks:
+        for factory in network.factories:
+            for machine in factory.machines:
+                for node in machine.nodes:
+                    node_to_network[node.id] = network.id
+
+    network_ids = {n.id for n in canvas.networks}
+
+    # Resolve cross-network edges
+    container_edges = _resolve_edges_for_containers(
+        all_connections, node_to_network, network_ids
+    )
+
+    # Build network-level organize items
+    items = []
+    for network in canvas.networks:
+        bounds = network_bounds.get(network.id)
+        if not bounds:
+            continue
+        # Add generous padding around each network's bounds
+        padded_width = bounds.width + NETWORK_PADDING * 2
+        padded_height = bounds.height + NETWORK_PADDING * 2
+        items.append(OrganizeItem(
+            id=network.id,
+            item_type="network",
+            width=padded_width,
+            height=padded_height,
+            x=bounds.x,
+            y=bounds.y,
+            node_ids=[n.id for n in _get_all_network_nodes(network)],
+        ))
+
+    if not items:
+        return
+
+    # Layout networks using the core algorithm
+    options = OrganizeOptions(
+        orientation=orientation,
+        horizontal_spacing=INTER_NETWORK_HORIZONTAL_SPACING,
+        vertical_spacing=INTER_NETWORK_VERTICAL_SPACING,
+        start_x=start_x,
+        start_y=start_y,
+        grid_columns=GRID_COLUMNS_CONTAINER,
+    )
+
+    layout = compute_organized_layout(items, container_edges, options)
+
+    # Apply network positions (translate all child nodes)
+    for network in canvas.networks:
+        pos = layout.get(network.id)
+        bounds = network_bounds.get(network.id)
+        if not pos or not bounds:
+            continue
+
+        dx = pos.x + NETWORK_PADDING - bounds.x
+        dy = pos.y + NETWORK_PADDING - bounds.y
+
+        for factory in network.factories:
+            for machine in factory.machines:
+                for node in machine.nodes:
+                    node.x += dx
+                    node.y += dy
