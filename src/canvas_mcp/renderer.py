@@ -185,7 +185,9 @@ class CanvasRenderer:
                       automatic layout with breathing room.
             spacing_level: Spacing level for organize ("node", "container", "network").
         """
-        # Auto-layout: either Thoughtorio organize or simple fallback
+        # Auto-layout: always use Thoughtorio hierarchical organize by default.
+        # The simple fallback only applies when organize is explicitly disabled
+        # AND all nodes happen to be at (0,0).
         if organize:
             organize_canvas(canvas, spacing_level=spacing_level)
         else:
@@ -259,15 +261,19 @@ class CanvasRenderer:
                 y_offset += 60  # extra gap between factories
 
     def _calculate_bounds(self, canvas: Canvas) -> dict:
-        """Calculate the bounding box of all nodes."""
+        """Calculate the bounding box of all nodes, including container chrome."""
         nodes = canvas.all_nodes()
         if not nodes:
             return {"min_x": 0, "min_y": 0, "width": 400, "height": 300}
 
-        min_x = min(n.x for n in nodes) - self.PADDING
-        min_y = min(n.y for n in nodes) - self.PADDING - 50  # Title space
-        max_x = max(n.x + n.width for n in nodes) + self.PADDING
-        max_y = max(n.y + n.height for n in nodes) + self.PADDING
+        # Account for container chrome (factory/machine backgrounds extend
+        # beyond the node bounds by CONTAINER_PADDING + CONTAINER_LABEL_HEIGHT)
+        container_margin = self.CONTAINER_PADDING + self.CONTAINER_LABEL_HEIGHT + 15  # factory expand
+
+        min_x = min(n.x for n in nodes) - self.PADDING - container_margin
+        min_y = min(n.y for n in nodes) - self.PADDING - container_margin - 50  # Title space
+        max_x = max(n.x + n.width for n in nodes) + self.PADDING + container_margin
+        max_y = max(n.y + n.height for n in nodes) + self.PADDING + container_margin
 
         return {
             "min_x": min_x,

@@ -73,11 +73,12 @@ async def list_tools() -> list[Tool]:
                     "organize": {
                         "type": "boolean",
                         "description": (
-                            "Apply Thoughtorio's organize algorithm for automatic layout "
-                            "with proper breathing room. Repositions all nodes using "
-                            "topological sorting and parent-center alignment. Default: false."
+                            "Apply Thoughtorio's hierarchical organize algorithm for "
+                            "automatic layout with proper breathing room. Organizes nodes "
+                            "within machines, machines within factories, factories within "
+                            "networks — each with appropriate spacing. Default: true."
                         ),
-                        "default": False,
+                        "default": True,
                     },
                     "spacing_level": {
                         "type": "string",
@@ -221,7 +222,7 @@ async def _render_canvas(args: dict) -> list[TextContent]:
     except Exception as e:
         return [TextContent(type="text", text=f"Failed to parse YAML recipe: {e}")]
 
-    organize = args.get("organize", False)
+    organize = args.get("organize", True)
     spacing_level = args.get("spacing_level", "container")
 
     renderer = CanvasRenderer(scale=scale)

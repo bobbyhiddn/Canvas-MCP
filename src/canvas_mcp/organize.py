@@ -4,6 +4,18 @@ Thoughtorio-style organize algorithm for Canvas-MCP.
 Ported from Thoughtorio's organize.js — topological layout with intelligent
 parent-child alignment, overlap prevention, and hierarchical spacing.
 
+The key feature that distinguishes this from a flat layout is **hierarchical
+application**: the organize algorithm runs at three levels:
+
+  1. Machine level — nodes within each machine (tight spacing)
+  2. Factory level — machines within each factory (medium spacing)
+  3. Network level — factories within each network (spacious spacing)
+
+At each level, child containers are treated as single items whose bounds
+are computed from their contents. Connections between nodes in different
+containers are resolved upward to container-level edges, so downstream
+flow relationships inform the layout at every level of the hierarchy.
+
 Spacing constants match Thoughtorio exactly:
   - Nodes within machines: 60px horizontal, 110px vertical
   - Containers (machines/factories): 150px horizontal, 190px vertical
@@ -16,7 +28,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .models import Canvas, CanvasNode
+from .models import Canvas, CanvasNode, CanvasMachine, CanvasFactory, CanvasNetwork
 
 
 # --- Spacing constants (from Thoughtorio) ---
@@ -30,7 +42,13 @@ CONTAINER_VERTICAL_SPACING = 190
 NETWORK_HORIZONTAL_SPACING = 190  # CONTAINER + 40
 NETWORK_VERTICAL_SPACING = 250    # CONTAINER + 60
 
-GRID_COLUMNS = 4
+# Internal padding for containers (space between container edge and first node)
+MACHINE_PADDING = 40
+FACTORY_PADDING = 60
+NETWORK_PADDING = 80
+
+GRID_COLUMNS_NODE = 4
+GRID_COLUMNS_CONTAINER = 3
 
 
 @dataclass
@@ -62,7 +80,7 @@ class OrganizeOptions:
     start_y: float = 0.0
     reference_center_x: float = 0.0
     reference_center_y: float = 0.0
-    grid_columns: int = GRID_COLUMNS
+    grid_columns: int = GRID_COLUMNS_NODE
 
 
 @dataclass
@@ -72,13 +90,26 @@ class LayoutPosition:
     y: float
 
 
+@dataclass
+class ContainerBounds:
+    """Bounding box for a container, computed from its children."""
+    x: float
+    y: float
+    width: float
+    height: float
+
+
+# ---------------------------------------------------------------------------
+# Core layout algorithm (unchanged from Thoughtorio port)
+# ---------------------------------------------------------------------------
+
 def compute_organized_layout(
     items: list[OrganizeItem],
     edges: list[OrganizeEdge],
     options: Optional[OrganizeOptions] = None,
 ) -> dict[str, LayoutPosition]:
     """
-    Core organize algorithm — port of Thoughtorio's computeOrganizedLayout().
+    Core organize algorithm -- port of Thoughtorio's computeOrganizedLayout().
 
     Steps:
     1. Build adjacency and indegree maps
@@ -288,28 +319,107 @@ def compute_organized_layout(
     return layout
 
 
-def organize_canvas(canvas: Canvas, spacing_level: str = "container") -> None:
+# ---------------------------------------------------------------------------
+# Bounds computation (from Thoughtorio's computeBoundsFromNodeIds)
+# ---------------------------------------------------------------------------
+
+def compute_bounds_from_nodes(nodes: list[CanvasNode]) -> Optional[ContainerBounds]:
+    """Compute the bounding box of a set of nodes.
+
+    Returns None if there are no nodes or coordinates are not finite.
+    Matches Thoughtorio's computeBoundsFromNodeIds().
     """
-    Apply Thoughtorio's organize algorithm to an entire Canvas model,
-    repositioning nodes in-place.
+    if not nodes:
+        return None
 
-    spacing_level controls the breathing room:
-      - "node": tight (60h, 110v) — good for small diagrams
-      - "container": medium (150h, 190v) — good for architecture diagrams (DEFAULT)
-      - "network": spacious (190h, 250v) — good for large system diagrams
+    min_x = float("inf")
+    min_y = float("inf")
+    max_x = float("-inf")
+    max_y = float("-inf")
+
+    for node in nodes:
+        w = node.width or 250
+        h = node.height or 120
+        if not math.isfinite(node.x) or not math.isfinite(node.y):
+            continue
+        min_x = min(min_x, node.x)
+        min_y = min(min_y, node.y)
+        max_x = max(max_x, node.x + w)
+        max_y = max(max_y, node.y + h)
+
+    if not math.isfinite(min_x):
+        return None
+
+    return ContainerBounds(
+        x=min_x,
+        y=min_y,
+        width=max(1, max_x - min_x),
+        height=max(1, max_y - min_y),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Edge resolution for container-level organize
+# ---------------------------------------------------------------------------
+
+def _resolve_edges_for_containers(
+    connections: list[tuple[str, str]],
+    node_to_container: dict[str, str],
+    container_ids: set[str],
+) -> list[OrganizeEdge]:
+    """Resolve node-level connections to container-level edges.
+
+    If node A (in machine-1) connects to node B (in machine-2), this
+    produces an edge machine-1 -> machine-2. Self-edges (same container)
+    are excluded. Duplicates are deduplicated.
+
+    Matches Thoughtorio's buildEdgesForOrganize() + resolveOrganizeEntity().
     """
-    spacing_map = {
-        "node": (NODE_HORIZONTAL_SPACING, NODE_VERTICAL_SPACING),
-        "container": (CONTAINER_HORIZONTAL_SPACING, CONTAINER_VERTICAL_SPACING),
-        "network": (NETWORK_HORIZONTAL_SPACING, NETWORK_VERTICAL_SPACING),
-    }
-    h_spacing, v_spacing = spacing_map.get(spacing_level, spacing_map["container"])
+    seen: set[tuple[str, str]] = set()
+    edges: list[OrganizeEdge] = []
 
-    all_nodes = canvas.all_nodes()
-    if not all_nodes:
-        return
+    for src_node, dst_node in connections:
+        src_container = node_to_container.get(src_node)
+        dst_container = node_to_container.get(dst_node)
 
-    # Build organize items from canvas nodes
+        if not src_container or not dst_container:
+            continue
+        if src_container == dst_container:
+            continue
+        if src_container not in container_ids or dst_container not in container_ids:
+            continue
+
+        pair = (src_container, dst_container)
+        if pair in seen:
+            continue
+        seen.add(pair)
+        edges.append(OrganizeEdge(from_id=src_container, to_id=dst_container))
+
+    return edges
+
+
+# ---------------------------------------------------------------------------
+# Hierarchical organize (the real Thoughtorio approach)
+# ---------------------------------------------------------------------------
+
+def _organize_machine(
+    machine: CanvasMachine,
+    all_connections: list[tuple[str, str]],
+    start_x: float,
+    start_y: float,
+) -> Optional[ContainerBounds]:
+    """Organize nodes within a single machine.
+
+    Matches Thoughtorio's buildMachineOrganizeContext() + layout application.
+
+    Returns the computed bounds of the machine after layout, or None if empty.
+    """
+    if not machine.nodes:
+        return None
+
+    node_ids = {n.id for n in machine.nodes}
+
+    # Build items from this machine's nodes
     items = [
         OrganizeItem(
             id=node.id,
@@ -320,30 +430,285 @@ def organize_canvas(canvas: Canvas, spacing_level: str = "container") -> None:
             y=node.y,
             node_ids=[node.id],
         )
-        for node in all_nodes
+        for node in machine.nodes
     ]
 
-    # Build edges from canvas connections
-    connections = canvas.all_connections()
+    # Build edges — only connections between nodes WITHIN this machine
     edges = [
         OrganizeEdge(from_id=src, to_id=dst)
-        for src, dst in connections
+        for src, dst in all_connections
+        if src in node_ids and dst in node_ids
     ]
 
-    # Compute organized layout
     options = OrganizeOptions(
         orientation="horizontal",
-        horizontal_spacing=h_spacing,
-        vertical_spacing=v_spacing,
-        start_x=80,  # Left margin (Thoughtorio uses 60-80 depending on level)
-        start_y=100,  # Top margin (room for title)
+        horizontal_spacing=NODE_HORIZONTAL_SPACING,
+        vertical_spacing=NODE_VERTICAL_SPACING,
+        start_x=start_x + MACHINE_PADDING,
+        start_y=start_y + MACHINE_PADDING,
+        grid_columns=GRID_COLUMNS_NODE,
     )
 
     layout = compute_organized_layout(items, edges, options)
 
-    # Apply positions back to canvas nodes
-    for node in all_nodes:
+    # Apply positions to nodes
+    for node in machine.nodes:
         pos = layout.get(node.id)
         if pos:
             node.x = pos.x
             node.y = pos.y
+
+    return compute_bounds_from_nodes(machine.nodes)
+
+
+def _organize_factory(
+    factory: CanvasFactory,
+    all_connections: list[tuple[str, str]],
+    start_x: float,
+    start_y: float,
+) -> Optional[ContainerBounds]:
+    """Organize machines within a single factory.
+
+    First organizes nodes within each machine (bottom-up), then positions
+    machines relative to each other using container-level edges.
+
+    Matches Thoughtorio's buildFactoryOrganizeContext().
+
+    Returns the computed bounds of the factory after layout, or None if empty.
+    """
+    if not factory.machines:
+        return None
+
+    # --- Step 1: Organize each machine's internal nodes ---
+    machine_bounds: dict[str, ContainerBounds] = {}
+    for machine in factory.machines:
+        # Use (0, 0) as temporary origin — we'll move the whole machine later
+        bounds = _organize_machine(machine, all_connections, 0, 0)
+        if bounds:
+            machine_bounds[machine.id] = bounds
+
+    if not machine_bounds:
+        return None
+
+    # --- Step 2: Build node-to-machine map for edge resolution ---
+    node_to_machine: dict[str, str] = {}
+    for machine in factory.machines:
+        for node in machine.nodes:
+            node_to_machine[node.id] = machine.id
+
+    machine_ids = {m.id for m in factory.machines}
+
+    # --- Step 3: Resolve cross-machine edges ---
+    container_edges = _resolve_edges_for_containers(
+        all_connections, node_to_machine, machine_ids
+    )
+
+    # --- Step 4: Build machine-level organize items ---
+    items = []
+    for machine in factory.machines:
+        bounds = machine_bounds.get(machine.id)
+        if not bounds:
+            continue
+        # Add padding to bounds for the container chrome
+        padded_width = bounds.width + MACHINE_PADDING * 2
+        padded_height = bounds.height + MACHINE_PADDING * 2 + 28  # 28 for label
+        items.append(OrganizeItem(
+            id=machine.id,
+            item_type="machine",
+            width=padded_width,
+            height=padded_height,
+            x=bounds.x,
+            y=bounds.y,
+            node_ids=[n.id for n in machine.nodes],
+        ))
+
+    if not items:
+        return None
+
+    # --- Step 5: Layout machines within the factory ---
+    options = OrganizeOptions(
+        orientation="horizontal",
+        horizontal_spacing=CONTAINER_HORIZONTAL_SPACING,
+        vertical_spacing=CONTAINER_VERTICAL_SPACING,
+        start_x=start_x + FACTORY_PADDING,
+        start_y=start_y + FACTORY_PADDING,
+        grid_columns=GRID_COLUMNS_CONTAINER,
+    )
+
+    layout = compute_organized_layout(items, container_edges, options)
+
+    # --- Step 6: Apply machine positions (translate all child nodes) ---
+    for machine in factory.machines:
+        pos = layout.get(machine.id)
+        bounds = machine_bounds.get(machine.id)
+        if not pos or not bounds:
+            continue
+
+        # The layout gives us where the machine container should go.
+        # We need to translate all nodes so they sit inside that position.
+        # Currently, nodes were organized relative to (0, 0).
+        # We shift them to the machine's new position + padding.
+        dx = pos.x + MACHINE_PADDING - bounds.x
+        dy = pos.y + MACHINE_PADDING + 28 - bounds.y  # 28 for label header
+
+        for node in machine.nodes:
+            node.x += dx
+            node.y += dy
+
+    # Compute final bounds of everything in this factory
+    all_factory_nodes = []
+    for machine in factory.machines:
+        all_factory_nodes.extend(machine.nodes)
+    return compute_bounds_from_nodes(all_factory_nodes)
+
+
+def _organize_network(
+    network: CanvasNetwork,
+    all_connections: list[tuple[str, str]],
+    start_x: float,
+    start_y: float,
+) -> Optional[ContainerBounds]:
+    """Organize factories within a single network.
+
+    First organizes machines within each factory (which in turn organizes
+    nodes within each machine), then positions factories relative to each
+    other using container-level edges.
+
+    Matches Thoughtorio's buildNetworkOrganizeContext().
+
+    Returns the computed bounds of the network after layout, or None if empty.
+    """
+    if not network.factories:
+        return None
+
+    # --- Step 1: Organize each factory's internal structure ---
+    factory_bounds: dict[str, ContainerBounds] = {}
+    for factory in network.factories:
+        bounds = _organize_factory(factory, all_connections, 0, 0)
+        if bounds:
+            factory_bounds[factory.id] = bounds
+
+    if not factory_bounds:
+        return None
+
+    # If there's only one factory, just position it at the start point
+    if len(factory_bounds) == 1:
+        factory = network.factories[0]
+        bounds = factory_bounds[factory.id]
+        if bounds:
+            dx = start_x + NETWORK_PADDING - bounds.x
+            dy = start_y + NETWORK_PADDING - bounds.y
+            for machine in factory.machines:
+                for node in machine.nodes:
+                    node.x += dx
+                    node.y += dy
+        all_nodes = []
+        for f in network.factories:
+            for m in f.machines:
+                all_nodes.extend(m.nodes)
+        return compute_bounds_from_nodes(all_nodes)
+
+    # --- Step 2: Build node-to-factory map for edge resolution ---
+    node_to_factory: dict[str, str] = {}
+    for factory in network.factories:
+        for machine in factory.machines:
+            for node in machine.nodes:
+                node_to_factory[node.id] = factory.id
+
+    factory_ids = {f.id for f in network.factories}
+
+    # --- Step 3: Resolve cross-factory edges ---
+    container_edges = _resolve_edges_for_containers(
+        all_connections, node_to_factory, factory_ids
+    )
+
+    # --- Step 4: Build factory-level organize items ---
+    items = []
+    for factory in network.factories:
+        bounds = factory_bounds.get(factory.id)
+        if not bounds:
+            continue
+        padded_width = bounds.width + FACTORY_PADDING * 2
+        padded_height = bounds.height + FACTORY_PADDING * 2 + 28
+        items.append(OrganizeItem(
+            id=factory.id,
+            item_type="factory",
+            width=padded_width,
+            height=padded_height,
+            x=bounds.x,
+            y=bounds.y,
+            node_ids=[n.id for m in factory.machines for n in m.nodes],
+        ))
+
+    if not items:
+        return None
+
+    # --- Step 5: Layout factories within the network ---
+    options = OrganizeOptions(
+        orientation="horizontal",
+        horizontal_spacing=NETWORK_HORIZONTAL_SPACING,
+        vertical_spacing=NETWORK_VERTICAL_SPACING,
+        start_x=start_x + NETWORK_PADDING,
+        start_y=start_y + NETWORK_PADDING,
+        grid_columns=GRID_COLUMNS_CONTAINER,
+    )
+
+    layout = compute_organized_layout(items, container_edges, options)
+
+    # --- Step 6: Apply factory positions (translate all child nodes) ---
+    for factory in network.factories:
+        pos = layout.get(factory.id)
+        bounds = factory_bounds.get(factory.id)
+        if not pos or not bounds:
+            continue
+
+        dx = pos.x + FACTORY_PADDING - bounds.x
+        dy = pos.y + FACTORY_PADDING + 28 - bounds.y
+
+        for machine in factory.machines:
+            for node in machine.nodes:
+                node.x += dx
+                node.y += dy
+
+    # Compute final bounds
+    all_nodes = []
+    for factory in network.factories:
+        for machine in factory.machines:
+            all_nodes.extend(machine.nodes)
+    return compute_bounds_from_nodes(all_nodes)
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def organize_canvas(canvas: Canvas, spacing_level: str = "container") -> None:
+    """
+    Apply Thoughtorio's hierarchical organize algorithm to an entire Canvas,
+    repositioning nodes in-place.
+
+    This is the HIERARCHICAL version that matches Thoughtorio's actual behavior:
+    1. Nodes are organized within each machine (node-level spacing)
+    2. Machines are organized within each factory (container-level spacing)
+    3. Factories are organized within each network (network-level spacing)
+
+    At each level, child containers are treated as single items with bounds
+    computed from their contents. Cross-container connections are resolved
+    upward so downstream flow informs layout at every level.
+
+    The spacing_level parameter is now advisory — the hierarchical system
+    always uses the correct spacing for each level. For single-machine
+    diagrams, it falls through to node-level spacing naturally.
+    """
+    all_nodes = canvas.all_nodes()
+    if not all_nodes:
+        return
+
+    all_connections = canvas.all_connections()
+
+    # Start position (top-left margin, leaving room for title)
+    start_x = 80
+    start_y = 100
+
+    for network in canvas.networks:
+        _organize_network(network, all_connections, start_x, start_y)
