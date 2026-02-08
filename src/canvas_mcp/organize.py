@@ -567,6 +567,7 @@ def _organize_network(
     all_connections: list[tuple[str, str]],
     start_x: float,
     start_y: float,
+    orientation: str = "horizontal",
 ) -> Optional[ContainerBounds]:
     """Organize factories within a single network.
 
@@ -584,7 +585,7 @@ def _organize_network(
     # --- Step 1: Organize each factory's internal structure ---
     factory_bounds: dict[str, ContainerBounds] = {}
     for factory in network.factories:
-        bounds = _organize_factory(factory, all_connections, 0, 0)
+        bounds = _organize_factory(factory, all_connections, 0, 0, orientation=orientation)
         if bounds:
             factory_bounds[factory.id] = bounds
 
@@ -682,7 +683,11 @@ def _organize_network(
 # Public API
 # ---------------------------------------------------------------------------
 
-def organize_canvas(canvas: Canvas, spacing_level: str = "container") -> None:
+def organize_canvas(
+    canvas: Canvas,
+    spacing_level: str = "container",
+    orientation: str = "horizontal",
+) -> None:
     """
     Apply Thoughtorio's hierarchical organize algorithm to an entire Canvas,
     repositioning nodes in-place.
@@ -695,6 +700,12 @@ def organize_canvas(canvas: Canvas, spacing_level: str = "container") -> None:
     At each level, child containers are treated as single items with bounds
     computed from their contents. Cross-container connections are resolved
     upward so downstream flow informs layout at every level.
+
+    Args:
+        canvas: The canvas to organize.
+        spacing_level: Advisory spacing level ("node", "container", "network").
+        orientation: Layout direction — "horizontal" (left→right) or "vertical"
+                     (top→bottom). Applied at all hierarchy levels.
 
     The spacing_level parameter is now advisory — the hierarchical system
     always uses the correct spacing for each level. For single-machine
@@ -711,4 +722,4 @@ def organize_canvas(canvas: Canvas, spacing_level: str = "container") -> None:
     start_y = 100
 
     for network in canvas.networks:
-        _organize_network(network, all_connections, start_x, start_y)
+        _organize_network(network, all_connections, start_x, start_y, orientation=orientation)
