@@ -466,6 +466,7 @@ def _organize_factory(
     all_connections: list[tuple[str, str]],
     start_x: float,
     start_y: float,
+    orientation: str = "horizontal",
 ) -> Optional[ContainerBounds]:
     """Organize machines within a single factory.
 
@@ -483,7 +484,7 @@ def _organize_factory(
     machine_bounds: dict[str, ContainerBounds] = {}
     for machine in factory.machines:
         # Use (0, 0) as temporary origin — we'll move the whole machine later
-        bounds = _organize_machine(machine, all_connections, 0, 0)
+        bounds = _organize_machine(machine, all_connections, 0, 0, orientation=orientation)
         if bounds:
             machine_bounds[machine.id] = bounds
 
@@ -646,7 +647,7 @@ def _organize_network(
 
     # --- Step 5: Layout factories within the network ---
     options = OrganizeOptions(
-        orientation="horizontal",
+        orientation=orientation,
         horizontal_spacing=NETWORK_HORIZONTAL_SPACING,
         vertical_spacing=NETWORK_VERTICAL_SPACING,
         start_x=start_x + NETWORK_PADDING,
