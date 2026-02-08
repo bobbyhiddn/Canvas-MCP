@@ -582,7 +582,7 @@ class CanvasRenderer:
             radius=int(style.corner_radius * self.scale),
             fill=style.fill_color,
             outline=style.border_color,
-            width=int(2 * self.scale),
+            width=int(style.border_width * self.scale),
         )
 
         # Node type indicator bar at top

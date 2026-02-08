@@ -47,6 +47,7 @@ class NodeStyle(BaseModel):
         label_color:  Override color for the label text (defaults to text_color).
         icon:         Reserved for future icon support.
         corner_radius: Border radius in pixels.
+        border_width:  Width of the node border in pixels (before scaling).
     """
     border_color: str = "#999999"
     fill_color: str = "#1e1e2e"
@@ -54,6 +55,7 @@ class NodeStyle(BaseModel):
     label_color: Optional[str] = None
     icon: str = ""
     corner_radius: int = 12
+    border_width: int = 3
 
 
 class ContainerStyle(BaseModel):
