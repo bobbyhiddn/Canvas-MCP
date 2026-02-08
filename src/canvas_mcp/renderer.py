@@ -10,7 +10,7 @@ from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
-from .models import Canvas, CanvasNode, CanvasFactory, CanvasMachine, NodeStyle
+from .models import Canvas, CanvasNode, CanvasFactory, CanvasMachine, ContainerStyle, NodeStyle
 from .organize import organize_canvas
 
 
@@ -304,21 +304,28 @@ class CanvasRenderer:
         x2 = (x2 + ox) * self.scale
         y2 = (y2 + oy) * self.scale
 
-        # Subtle dashed-style container
+        # Resolve style — custom overrides per-field, fallback to defaults
+        s = machine.style
+        fill_hex = s.fill_color if s and s.fill_color else "#181825"
+        fill_alpha = s.alpha if s and s.alpha is not None else 120
+        outline_color = s.border_color if s and s.border_color else "#313244"
+        label_color = s.label_color if s and s.label_color else "#6c7086"
+        radius = s.corner_radius if s and s.corner_radius is not None else 8
+        border_w = s.border_width if s and s.border_width is not None else 1
+
         _draw_rounded_rect(
             draw, (x1, y1, x2, y2),
-            radius=8,
-            fill=_hex_to_rgba("#181825", 120),
-            outline="#313244",
-            width=1,
+            radius=radius,
+            fill=_hex_to_rgba(fill_hex, fill_alpha),
+            outline=outline_color,
+            width=border_w,
         )
 
-        # Machine label
-        label = machine.label or machine.id
+        # Machine label (uses get_label() for consistent fallback)
         draw.text(
             (x1 + 10, y1 + 5),
-            label,
-            fill="#6c7086",
+            machine.get_label(),
+            fill=label_color,
             font=self.font_container,
         )
 
@@ -338,19 +345,32 @@ class CanvasRenderer:
         x2 = (x2 + expand + ox) * self.scale
         y2 = (y2 + expand + oy) * self.scale
 
+        # Resolve style — custom overrides per-field, fallback to defaults
+        s = factory.style
+        outline_color = s.border_color if s and s.border_color else "#45475a"
+        label_color = s.label_color if s and s.label_color else "#a6adc8"
+        radius = s.corner_radius if s and s.corner_radius is not None else 12
+        border_w = s.border_width if s and s.border_width is not None else 1
+
+        # Factory fill: default is transparent (no fill), but honor custom if set
+        fill = None
+        if s and s.fill_color:
+            fill_alpha = s.alpha if s.alpha is not None else 80
+            fill = _hex_to_rgba(s.fill_color, fill_alpha)
+
         _draw_rounded_rect(
             draw, (x1, y1, x2, y2),
-            radius=12,
-            outline="#45475a",
-            width=1,
+            radius=radius,
+            fill=fill,
+            outline=outline_color,
+            width=border_w,
         )
 
-        # Factory label
-        label = factory.label or factory.id
+        # Factory label (uses get_label() for consistent fallback)
         draw.text(
             (x1 + 12, y1 + 6),
-            label,
-            fill="#a6adc8",
+            factory.get_label(),
+            fill=label_color,
             font=self.font_container,
         )
 

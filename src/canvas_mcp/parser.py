@@ -16,6 +16,7 @@ from .models import (
     CanvasMachine,
     CanvasNetwork,
     CanvasNode,
+    ContainerStyle,
     NodeStyle,
 )
 
@@ -51,18 +52,29 @@ def _parse_thoughtorio_format(data: dict) -> Canvas:
         network = CanvasNetwork(
             id=net_data.get("id", "network-1"),
             label=net_data.get("label"),
+            description=net_data.get("description"),
         )
 
         for fac_data in net_data.get("factories", []):
+            fac_style = None
+            if "style" in fac_data:
+                fac_style = ContainerStyle(**fac_data["style"])
             factory = CanvasFactory(
                 id=fac_data.get("id", "factory-1"),
                 label=fac_data.get("label"),
+                description=fac_data.get("description"),
+                style=fac_style,
             )
 
             for mach_data in fac_data.get("machines", []):
+                mach_style = None
+                if "style" in mach_data:
+                    mach_style = ContainerStyle(**mach_data["style"])
                 machine = CanvasMachine(
                     id=mach_data.get("id", "machine-1"),
                     label=mach_data.get("label"),
+                    description=mach_data.get("description"),
+                    style=mach_style,
                 )
 
                 for node_data in mach_data.get("nodes", []):
@@ -151,16 +163,36 @@ def canvas_to_yaml(canvas: Canvas) -> str:
         net_data = {"id": network.id, "factories": []}
         if network.label:
             net_data["label"] = network.label
+        if network.description:
+            net_data["description"] = network.description
 
         for factory in network.factories:
             fac_data = {"id": factory.id, "machines": []}
             if factory.label:
                 fac_data["label"] = factory.label
+            if factory.description:
+                fac_data["description"] = factory.description
+            if factory.style:
+                fac_style_dict = {
+                    k: v for k, v in factory.style.model_dump().items()
+                    if v is not None
+                }
+                if fac_style_dict:
+                    fac_data["style"] = fac_style_dict
 
             for machine in factory.machines:
                 mach_data = {"id": machine.id, "nodes": []}
                 if machine.label:
                     mach_data["label"] = machine.label
+                if machine.description:
+                    mach_data["description"] = machine.description
+                if machine.style:
+                    mach_style_dict = {
+                        k: v for k, v in machine.style.model_dump().items()
+                        if v is not None
+                    }
+                    if mach_style_dict:
+                        mach_data["style"] = mach_style_dict
 
                 for node in machine.nodes:
                     node_data = {
