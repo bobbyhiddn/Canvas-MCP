@@ -16,10 +16,10 @@ are computed from their contents. Connections between nodes in different
 containers are resolved upward to container-level edges, so downstream
 flow relationships inform the layout at every level of the hierarchy.
 
-Spacing constants match Thoughtorio exactly:
-  - Nodes within machines: 60px horizontal, 110px vertical
-  - Containers (machines/factories): 150px horizontal, 190px vertical
-  - Networks: 190px horizontal, 250px vertical
+Spacing constants scaled up from Thoughtorio for larger, more legible nodes:
+  - Nodes within machines: 90px horizontal, 140px vertical
+  - Containers (machines/factories): 200px horizontal, 240px vertical
+  - Networks: 260px horizontal, 320px vertical
 """
 
 from __future__ import annotations
@@ -33,19 +33,19 @@ from .models import Canvas, CanvasNode, CanvasMachine, CanvasFactory, CanvasNetw
 
 # --- Spacing constants (from Thoughtorio) ---
 
-NODE_HORIZONTAL_SPACING = 60
-NODE_VERTICAL_SPACING = 110
+NODE_HORIZONTAL_SPACING = 90
+NODE_VERTICAL_SPACING = 140
 
-CONTAINER_HORIZONTAL_SPACING = 150
-CONTAINER_VERTICAL_SPACING = 190
+CONTAINER_HORIZONTAL_SPACING = 200
+CONTAINER_VERTICAL_SPACING = 240
 
-NETWORK_HORIZONTAL_SPACING = 190  # CONTAINER + 40
-NETWORK_VERTICAL_SPACING = 250    # CONTAINER + 60
+NETWORK_HORIZONTAL_SPACING = 260  # CONTAINER + 60
+NETWORK_VERTICAL_SPACING = 320    # CONTAINER + 80
 
 # Internal padding for containers (space between container edge and first node)
-MACHINE_PADDING = 40
-FACTORY_PADDING = 60
-NETWORK_PADDING = 80
+MACHINE_PADDING = 55
+FACTORY_PADDING = 75
+NETWORK_PADDING = 100
 
 GRID_COLUMNS_NODE = 4
 GRID_COLUMNS_CONTAINER = 3
@@ -338,8 +338,8 @@ def compute_bounds_from_nodes(nodes: list[CanvasNode]) -> Optional[ContainerBoun
     max_y = float("-inf")
 
     for node in nodes:
-        w = node.width or 250
-        h = node.height or 120
+        w = node.width or 360
+        h = node.height or 180
         if not math.isfinite(node.x) or not math.isfinite(node.y):
             continue
         min_x = min(min_x, node.x)
@@ -513,7 +513,7 @@ def _organize_factory(
             continue
         # Add padding to bounds for the container chrome
         padded_width = bounds.width + MACHINE_PADDING * 2
-        padded_height = bounds.height + MACHINE_PADDING * 2 + 28  # 28 for label
+        padded_height = bounds.height + MACHINE_PADDING * 2 + 40  # 40 for label
         items.append(OrganizeItem(
             id=machine.id,
             item_type="machine",
@@ -559,7 +559,7 @@ def _organize_factory(
         # Currently, nodes were organized relative to (0, 0).
         # We shift them to the machine's new position + padding.
         dx = pos.x + MACHINE_PADDING - bounds.x
-        dy = pos.y + MACHINE_PADDING + 28 - bounds.y  # 28 for label header
+        dy = pos.y + MACHINE_PADDING + 40 - bounds.y  # 40 for label header
 
         for node in machine.nodes:
             node.x += dx
@@ -640,7 +640,7 @@ def _organize_network(
         if not bounds:
             continue
         padded_width = bounds.width + FACTORY_PADDING * 2
-        padded_height = bounds.height + FACTORY_PADDING * 2 + 28
+        padded_height = bounds.height + FACTORY_PADDING * 2 + 40  # 40 for label
         items.append(OrganizeItem(
             id=factory.id,
             item_type="factory",
@@ -680,7 +680,7 @@ def _organize_network(
             continue
 
         dx = pos.x + FACTORY_PADDING - bounds.x
-        dy = pos.y + FACTORY_PADDING + 28 - bounds.y
+        dy = pos.y + FACTORY_PADDING + 40 - bounds.y  # 40 for label header
 
         for machine in factory.machines:
             for node in machine.nodes:
@@ -709,8 +709,8 @@ def _get_all_network_nodes(network: CanvasNetwork) -> list[CanvasNode]:
 
 
 # Spacing between networks at the top level (generous to separate systems)
-INTER_NETWORK_HORIZONTAL_SPACING = 250
-INTER_NETWORK_VERTICAL_SPACING = 300
+INTER_NETWORK_HORIZONTAL_SPACING = 320
+INTER_NETWORK_VERTICAL_SPACING = 380
 
 
 def organize_canvas(

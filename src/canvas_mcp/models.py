@@ -134,8 +134,8 @@ class CanvasNode(BaseModel):
     label: Optional[str] = None
     x: float = 0.0
     y: float = 0.0
-    width: float = 250.0
-    height: float = 120.0
+    width: float = 360.0
+    height: float = 180.0
     inputs: list[str] = Field(default_factory=list)
     outputs: list[str] = Field(default_factory=list)
     style: Optional[NodeStyle] = None

@@ -167,19 +167,19 @@ class CanvasRenderer:
     """Renders a Canvas model to a PNG image."""
 
     # Layout constants
-    PADDING = 40
-    NODE_PADDING = 16
-    LABEL_HEIGHT = 24
-    CONTAINER_PADDING = 30
-    CONTAINER_LABEL_HEIGHT = 28
+    PADDING = 60
+    NODE_PADDING = 24
+    LABEL_HEIGHT = 36
+    CONTAINER_PADDING = 45
+    CONTAINER_LABEL_HEIGHT = 40
 
     def __init__(self, scale: float = 1.0):
         self.scale = scale
-        self.font_body = _load_font(int(13 * scale))
-        self.font_label = _load_bold_font(int(14 * scale))
-        self.font_title = _load_bold_font(int(20 * scale))
-        self.font_container = _load_bold_font(int(12 * scale))
-        self.font_small = _load_font(int(10 * scale))
+        self.font_body = _load_font(int(18 * scale))
+        self.font_label = _load_bold_font(int(20 * scale))
+        self.font_title = _load_bold_font(int(28 * scale))
+        self.font_container = _load_bold_font(int(16 * scale))
+        self.font_small = _load_font(int(14 * scale))
 
     def render(
         self,
@@ -270,9 +270,9 @@ class CanvasRenderer:
                     for node in machine.nodes:
                         node.x = x
                         node.y = y_offset
-                        x += node.width + 80  # horizontal spacing
-                    y_offset += 200  # vertical spacing between machines
-                y_offset += 60  # extra gap between factories
+                        x += node.width + 120  # horizontal spacing
+                    y_offset += 280  # vertical spacing between machines
+                y_offset += 80  # extra gap between factories
 
     def _calculate_bounds(self, canvas: Canvas) -> dict:
         """Calculate the bounding box of all nodes, including container chrome."""
@@ -282,7 +282,7 @@ class CanvasRenderer:
 
         # Account for container chrome (factory/machine backgrounds extend
         # beyond the node bounds by CONTAINER_PADDING + CONTAINER_LABEL_HEIGHT)
-        container_margin = self.CONTAINER_PADDING + self.CONTAINER_LABEL_HEIGHT + 15  # factory expand
+        container_margin = self.CONTAINER_PADDING + self.CONTAINER_LABEL_HEIGHT + 20  # factory expand
 
         min_x = min(n.x for n in nodes) - self.PADDING - container_margin
         min_y = min(n.y for n in nodes) - self.PADDING - container_margin - 50  # Title space
@@ -343,7 +343,7 @@ class CanvasRenderer:
 
         # Machine label (uses get_label() for consistent fallback)
         draw.text(
-            (x1 + 10, y1 + 5),
+            (x1 + 14, y1 + 8),
             machine.get_label(),
             fill=label_color,
             font=self.font_container,
@@ -359,7 +359,7 @@ class CanvasRenderer:
 
         x1, y1, x2, y2 = self._get_container_bounds(all_nodes)
         # Expand a bit beyond machine containers
-        expand = 15
+        expand = 20
         x1 = (x1 - expand + ox) * self.scale
         y1 = (y1 - expand + oy) * self.scale - self.CONTAINER_LABEL_HEIGHT
         x2 = (x2 + expand + ox) * self.scale
@@ -388,7 +388,7 @@ class CanvasRenderer:
 
         # Factory label (uses get_label() for consistent fallback)
         draw.text(
-            (x1 + 12, y1 + 6),
+            (x1 + 16, y1 + 8),
             factory.get_label(),
             fill=label_color,
             font=self.font_container,
@@ -513,7 +513,7 @@ class CanvasRenderer:
         start: tuple[float, float],
         end: tuple[float, float],
         color: str,
-        width: int = 3,
+        width: int = 4,
         direction: str = "horizontal",
     ):
         """Draw a smooth bezier-like connection between two points.
@@ -563,7 +563,7 @@ class CanvasRenderer:
 
         # Arrowhead at end
         if len(points) >= 2:
-            _draw_arrow(draw, points[-2], points[-1], color=color, width=width, arrow_size=int(14 * self.scale))
+            _draw_arrow(draw, points[-2], points[-1], color=color, width=width, arrow_size=int(18 * self.scale))
 
     def _draw_node(self, draw: ImageDraw.ImageDraw, node: CanvasNode, ox: float, oy: float):
         """Draw a single node."""
@@ -584,7 +584,7 @@ class CanvasRenderer:
         )
 
         # Node type indicator bar at top
-        bar_height = int(4 * self.scale)
+        bar_height = int(6 * self.scale)
         _draw_rounded_rect(
             draw,
             (x + 2, y + 2, x + w - 2, y + bar_height + 2),
@@ -594,7 +594,7 @@ class CanvasRenderer:
 
         # Label
         label = node.get_label()
-        label_y = y + bar_height + int(8 * self.scale)
+        label_y = y + bar_height + int(12 * self.scale)
         draw.text(
             (x + int(self.NODE_PADDING * self.scale), label_y),
             label,
@@ -603,12 +603,13 @@ class CanvasRenderer:
         )
 
         # Content text (wrapped)
-        content_y = label_y + int(22 * self.scale)
+        content_y = label_y + int(30 * self.scale)
         max_text_width = int(w - 2 * self.NODE_PADDING * self.scale)
         if node.content:
             lines = _wrap_text(node.content, self.font_body, max_text_width)
             # Limit to what fits in the node
-            max_lines = int((h - (content_y - y) - 10 * self.scale) / (16 * self.scale))
+            line_height = int(24 * self.scale)
+            max_lines = int((h - (content_y - y) - 14 * self.scale) / line_height)
             if max_lines < 1:
                 max_lines = 1
             display_lines = lines[:max_lines]
@@ -617,7 +618,7 @@ class CanvasRenderer:
 
             for i, line in enumerate(display_lines):
                 draw.text(
-                    (x + int(self.NODE_PADDING * self.scale), content_y + i * int(16 * self.scale)),
+                    (x + int(self.NODE_PADDING * self.scale), content_y + i * line_height),
                     line,
                     fill="#a6adc8",
                     font=self.font_body,
@@ -626,10 +627,10 @@ class CanvasRenderer:
         # Type badge in bottom-right
         type_text = node.type
         type_bbox = self.font_small.getbbox(type_text)
-        type_w = type_bbox[2] - type_bbox[0] + 8
-        type_h = type_bbox[3] - type_bbox[1] + 4
-        type_x = x + w - type_w - int(8 * self.scale)
-        type_y = y + h - type_h - int(8 * self.scale)
+        type_w = type_bbox[2] - type_bbox[0] + 12
+        type_h = type_bbox[3] - type_bbox[1] + 6
+        type_x = x + w - type_w - int(10 * self.scale)
+        type_y = y + h - type_h - int(10 * self.scale)
 
         _draw_rounded_rect(
             draw, (type_x, type_y, type_x + type_w, type_y + type_h),
@@ -637,7 +638,7 @@ class CanvasRenderer:
             fill=_darken(style.border_color, 0.3),
         )
         draw.text(
-            (type_x + 4, type_y + 1),
+            (type_x + 6, type_y + 2),
             type_text,
             fill=style.border_color,
             font=self.font_small,

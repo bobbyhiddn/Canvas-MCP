@@ -1,4 +1,12 @@
-"""Test the hierarchical organize system with a Rhode architecture diagram."""
+"""Test the hierarchical organize system with a Rhode architecture diagram.
+
+Ontology rules (from Thoughtorio):
+  - Machine = connected component of nodes (nodes with direct edges between them)
+  - Factory = machines connected by explicit cross-machine edges
+  - Network = factories connected by explicit cross-factory edges
+  - A factory is NEVER a bag of disconnected machines
+  - Shared upstream input does NOT imply shared factory
+"""
 
 import sys
 sys.path.insert(0, "src")
@@ -10,41 +18,74 @@ from canvas_mcp.renderer import CanvasRenderer
 
 
 def build_rhode_canvas() -> Canvas:
-    """Build a multi-machine, multi-factory Rhode architecture diagram."""
+    """Build Rhode architecture following Thoughtorio ontology rules.
 
-    # --- Factory 1: Input Layer ---
+    The key insight: factories are defined by connectivity, not by category.
+    Machines in the same factory MUST have explicit cross-machine connections.
+
+    Rhode's data flow:
+      telegram ──┐
+                 ├──→ task-queue → agent ──→ tools ──→ outputs
+      bus-monitor┘        ↑                    ↑
+                       memory              (fan-out)
+
+    Factory 1 "Ingestion": input sources → task queue (seed → process pipeline)
+    Factory 2 "Core Processing": task-queue → agent ← memory (cross-machine join)
+    Factory 3 "Tooling & Output": agent → tools → outputs (fan-out → converge)
+      - Tools machine: canvas-mcp, ordinal-mcp, git, shell (parallel from agent)
+      - Telegram Output machine: send-photo, send-text (converge from tools+agent)
+      - Oracle Output machine: oracle-response (from ordinal-mcp)
+      Cross-machine edges: tools→telegram-output (canvas-mcp→send-photo),
+                           tools→oracle-output (ordinal-mcp→oracle-response)
+    """
+
+    # =================================================================
+    # Factory 1: Ingestion
+    # One machine — telegram and bus-monitor are parallel input sources
+    # that both feed into the task queue. The task queue is the terminus
+    # of this factory; it outputs to the next factory.
+    # =================================================================
     telegram_node = CanvasNode(
         id="telegram", type="input", label="Telegram Bot",
         content="Receives messages, photos, files from Micah",
+        outputs=["task-queue"],
     )
     bus_monitor = CanvasNode(
-        id="bus-monitor", type="process", label="Bus Monitor",
+        id="bus-monitor", type="input", label="Bus Monitor",
         content="Polls oracle bus for requests, routes by ordinal level",
+        outputs=["task-queue"],
     )
-    input_machine = CanvasMachine(
-        id="input-pipeline", label="Input Pipeline",
-        nodes=[telegram_node, bus_monitor],
-    )
-    input_factory = CanvasFactory(
-        id="input-layer", label="Input Layer",
-        machines=[input_machine],
-        style=ContainerStyle(border_color="#2196F3"),
-    )
-
-    # --- Factory 2: Core Processing ---
     task_queue = CanvasNode(
         id="task-queue", type="process", label="Task Queue",
         content="Async task queue with priority handling",
         inputs=["telegram", "bus-monitor"],
     )
+    ingestion_machine = CanvasMachine(
+        id="ingestion-pipeline", label="Ingestion Pipeline",
+        nodes=[telegram_node, bus_monitor, task_queue],
+    )
+    ingestion_factory = CanvasFactory(
+        id="ingestion", label="Ingestion",
+        machines=[ingestion_machine],
+        style=ContainerStyle(border_color="#2196F3"),
+    )
+
+    # =================================================================
+    # Factory 2: Core Processing
+    # Two machines with an explicit cross-machine connection:
+    #   - Processing machine: task-queue input → agent (the main pipeline)
+    #   - Memory machine: memory store (feeds into agent)
+    # Cross-machine edge: memory → agent (memory-system → processing)
+    # This is a valid factory — machines are connected.
+    # =================================================================
     agent = CanvasNode(
         id="agent", type="ai", label="Claude Agent",
         content="Opus 4.6 with MCP tools, memory injection, multi-turn",
-        inputs=["task-queue"],
+        inputs=["task-queue", "memory"],
     )
     processing_machine = CanvasMachine(
-        id="processing", label="Core Processing",
-        nodes=[task_queue, agent],
+        id="processing", label="Agent Pipeline",
+        nodes=[agent],
     )
 
     memory = CanvasNode(
@@ -58,27 +99,42 @@ def build_rhode_canvas() -> Canvas:
     )
 
     core_factory = CanvasFactory(
-        id="core-layer", label="Core Engine",
-        machines=[processing_machine, memory_machine],
+        id="core-engine", label="Core Engine",
+        machines=[memory_machine, processing_machine],
         style=ContainerStyle(border_color="#9C27B0"),
     )
 
-    # --- Factory 3: Tool Layer ---
+    # =================================================================
+    # Factory 3: Tooling & Output
+    # Three machines, ALL connected by explicit cross-machine edges:
+    #
+    #   Tools machine (fan-out from agent):
+    #     canvas-mcp, ordinal-mcp, git, shell
+    #                    │                  │
+    #                    ├──────────────────┤
+    #                    ↓                  ↓
+    #   Telegram Output machine:    Oracle Output machine:
+    #     send-photo, send-text       oracle-response
+    #
+    # Cross-machine edges:
+    #   tools → telegram-output (canvas-mcp → send-photo)
+    #   tools → oracle-output   (ordinal-mcp → oracle-response)
+    #
+    # This is a valid factory — all three machines are connected
+    # through explicit cross-machine paths.
+    # =================================================================
     canvas_mcp = CanvasNode(
         id="canvas-mcp", type="source", label="Canvas MCP",
         content="Thoughtorio-style diagram renderer",
         inputs=["agent"],
+        outputs=["send-photo"],
     )
     ordinal_mcp = CanvasNode(
         id="ordinal-mcp", type="source", label="Ordinal MCP",
         content="Oracle bus for human-in-the-loop decisions",
         inputs=["agent"],
+        outputs=["oracle-response"],
     )
-    tool_machine = CanvasMachine(
-        id="mcp-tools", label="MCP Tools",
-        nodes=[canvas_mcp, ordinal_mcp],
-    )
-
     git_node = CanvasNode(
         id="git", type="source", label="Git / GitHub",
         content="Code operations, PR creation, branch management",
@@ -89,18 +145,11 @@ def build_rhode_canvas() -> Canvas:
         content="Full system access, uv, podman, systemd",
         inputs=["agent"],
     )
-    system_machine = CanvasMachine(
-        id="system-tools", label="System Tools",
-        nodes=[git_node, shell_node],
+    tools_machine = CanvasMachine(
+        id="tools", label="Tools",
+        nodes=[canvas_mcp, ordinal_mcp, git_node, shell_node],
     )
 
-    tools_factory = CanvasFactory(
-        id="tools-layer", label="Tool Layer",
-        machines=[tool_machine, system_machine],
-        style=ContainerStyle(border_color="#FF9800"),
-    )
-
-    # --- Factory 4: Output Layer ---
     send_photo = CanvasNode(
         id="send-photo", type="output", label="Photo/File Send",
         content="Send diagrams, files to Telegram",
@@ -111,8 +160,8 @@ def build_rhode_canvas() -> Canvas:
         content="Send formatted messages to Telegram",
         inputs=["agent"],
     )
-    output_machine = CanvasMachine(
-        id="output-pipeline", label="Output Pipeline",
+    telegram_output_machine = CanvasMachine(
+        id="telegram-output", label="Telegram Output",
         nodes=[send_photo, send_text],
     )
 
@@ -121,21 +170,26 @@ def build_rhode_canvas() -> Canvas:
         content="Write responses to ordinal bus",
         inputs=["ordinal-mcp"],
     )
-    oracle_machine = CanvasMachine(
+    oracle_output_machine = CanvasMachine(
         id="oracle-output", label="Oracle Output",
         nodes=[oracle_response],
     )
 
     output_factory = CanvasFactory(
-        id="output-layer", label="Output Layer",
-        machines=[output_machine, oracle_machine],
-        style=ContainerStyle(border_color="#FFC107"),
+        id="tooling-and-output", label="Tooling & Output",
+        machines=[tools_machine, telegram_output_machine, oracle_output_machine],
+        style=ContainerStyle(border_color="#FF9800"),
     )
 
-    # --- Assemble ---
+    # =================================================================
+    # Assemble: One network, three factories
+    # Cross-factory edges:
+    #   ingestion → core-engine  (task-queue → agent)
+    #   core-engine → tooling    (agent → canvas-mcp, ordinal-mcp, git, shell)
+    # =================================================================
     network = CanvasNetwork(
         id="rhode-system", label="Rhode System",
-        factories=[input_factory, core_factory, tools_factory, output_factory],
+        factories=[ingestion_factory, core_factory, output_factory],
     )
 
     canvas = Canvas(
@@ -154,7 +208,7 @@ def main():
     print(f"Factories: {sum(len(n.factories) for n in canvas.networks)}")
     print(f"Machines: {sum(len(f.machines) for n in canvas.networks for f in n.factories)}")
 
-    renderer = CanvasRenderer(scale=2.0)
+    renderer = CanvasRenderer(scale=3.0)
     output_path = "/home/bobbyhiddn/.rhode/canvas/rhode-architecture-hierarchical.png"
 
     try:
