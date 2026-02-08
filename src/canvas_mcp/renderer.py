@@ -11,6 +11,7 @@ from typing import Optional
 from PIL import Image, ImageDraw, ImageFont
 
 from .models import Canvas, CanvasNode, CanvasFactory, CanvasMachine, NodeStyle
+from .organize import organize_canvas
 
 
 # --- Font handling ---
@@ -168,10 +169,27 @@ class CanvasRenderer:
         self.font_container = _load_bold_font(int(12 * scale))
         self.font_small = _load_font(int(10 * scale))
 
-    def render(self, canvas: Canvas, output_path: Optional[str] = None) -> bytes:
-        """Render the canvas to PNG bytes. Optionally save to file."""
-        # Auto-layout if nodes have no coordinates
-        self._auto_layout_if_needed(canvas)
+    def render(
+        self,
+        canvas: Canvas,
+        output_path: Optional[str] = None,
+        organize: bool = False,
+        spacing_level: str = "container",
+    ) -> bytes:
+        """Render the canvas to PNG bytes. Optionally save to file.
+
+        Args:
+            canvas: The canvas to render.
+            output_path: Optional path to save the PNG.
+            organize: If True, apply Thoughtorio's organize algorithm for
+                      automatic layout with breathing room.
+            spacing_level: Spacing level for organize ("node", "container", "network").
+        """
+        # Auto-layout: either Thoughtorio organize or simple fallback
+        if organize:
+            organize_canvas(canvas, spacing_level=spacing_level)
+        else:
+            self._auto_layout_if_needed(canvas)
 
         # Calculate canvas bounds from node positions
         bounds = self._calculate_bounds(canvas)

@@ -70,6 +70,26 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Output filename (without extension). Default: auto-generated UUID.",
                     },
+                    "organize": {
+                        "type": "boolean",
+                        "description": (
+                            "Apply Thoughtorio's organize algorithm for automatic layout "
+                            "with proper breathing room. Repositions all nodes using "
+                            "topological sorting and parent-center alignment. Default: false."
+                        ),
+                        "default": False,
+                    },
+                    "spacing_level": {
+                        "type": "string",
+                        "enum": ["node", "container", "network"],
+                        "description": (
+                            "Spacing level for organize layout: "
+                            "'node' (tight: 60h/110v), "
+                            "'container' (medium: 150h/190v, default), "
+                            "'network' (spacious: 190h/250v)."
+                        ),
+                        "default": "container",
+                    },
                 },
                 "required": ["yaml_recipe"],
             },
@@ -132,6 +152,19 @@ async def list_tools() -> list[Tool]:
                         "description": "Render scale factor (default 2.0)",
                         "default": 2.0,
                     },
+                    "organize": {
+                        "type": "boolean",
+                        "description": (
+                            "Apply Thoughtorio's organize algorithm for automatic layout. Default: true."
+                        ),
+                        "default": True,
+                    },
+                    "spacing_level": {
+                        "type": "string",
+                        "enum": ["node", "container", "network"],
+                        "description": "Spacing level for organize layout. Default: 'container'.",
+                        "default": "container",
+                    },
                 },
                 "required": ["title", "nodes"],
             },
@@ -188,11 +221,19 @@ async def _render_canvas(args: dict) -> list[TextContent]:
     except Exception as e:
         return [TextContent(type="text", text=f"Failed to parse YAML recipe: {e}")]
 
+    organize = args.get("organize", False)
+    spacing_level = args.get("spacing_level", "container")
+
     renderer = CanvasRenderer(scale=scale)
     output_path = str(OUTPUT_DIR / f"{filename}.png")
 
     try:
-        renderer.render(canvas, output_path=output_path)
+        renderer.render(
+            canvas,
+            output_path=output_path,
+            organize=organize,
+            spacing_level=spacing_level,
+        )
     except Exception as e:
         return [TextContent(type="text", text=f"Rendering failed: {e}")]
 
@@ -204,6 +245,8 @@ async def _render_canvas(args: dict) -> list[TextContent]:
             "title": canvas.title,
             "nodes": len(canvas.all_nodes()),
             "connections": len(canvas.all_connections()),
+            "organized": organize,
+            "spacing_level": spacing_level if organize else None,
         }),
     )]
 
@@ -216,6 +259,8 @@ async def _create_canvas(args: dict) -> list[TextContent]:
     node_defs = args["nodes"]
     machine_defs = args.get("machines")
     scale = args.get("scale", 2.0)
+    organize = args.get("organize", True)
+    spacing_level = args.get("spacing_level", "container")
 
     # Build node objects
     nodes_by_id = {}
@@ -260,7 +305,12 @@ async def _create_canvas(args: dict) -> list[TextContent]:
     output_path = str(OUTPUT_DIR / f"{filename}.png")
 
     try:
-        renderer.render(canvas, output_path=output_path)
+        renderer.render(
+            canvas,
+            output_path=output_path,
+            organize=organize,
+            spacing_level=spacing_level,
+        )
     except Exception as e:
         return [TextContent(type="text", text=f"Rendering failed: {e}")]
 
