@@ -354,26 +354,116 @@ class CanvasRenderer:
             font=self.font_container,
         )
 
+    def _determine_port(
+        self, source: CanvasNode, target: CanvasNode
+    ) -> tuple[str, str]:
+        """Determine connection ports based on relative node positions.
+
+        Uses the spatial relationship between nodes to decide whether
+        connections should use side ports (horizontal flow) or top/bottom
+        ports (vertical flow).  The "horizon" threshold is based on the
+        vertical offset relative to the source node's height — if the
+        target center is more than 1.5× the source height away vertically
+        and the vertical distance dominates the horizontal distance, we
+        switch to vertical connectors.
+
+        Returns (from_port, to_port) where port is one of:
+            'output'  → right edge center
+            'input'   → left edge center
+            'bottom'  → bottom edge center
+            'top'     → top edge center
+        """
+        # Centers of each node
+        src_cx = source.x + source.width / 2
+        src_cy = source.y + source.height / 2
+        tgt_cx = target.x + target.width / 2
+        tgt_cy = target.y + target.height / 2
+
+        dx = tgt_cx - src_cx
+        dy = tgt_cy - src_cy
+
+        # Horizon threshold: if vertical distance is dominant and significant
+        # we switch to vertical connectors. "Significant" = more than 1.5×
+        # the source node height AND the vertical component is larger than
+        # the horizontal component.
+        horizon = source.height * 1.5
+
+        if abs(dy) > horizon and abs(dy) > abs(dx):
+            if dy > 0:
+                # Target is below source
+                return ("bottom", "top")
+            else:
+                # Target is above source
+                return ("top", "bottom")
+
+        # Default: horizontal flow (left-to-right or right-to-left)
+        if dx >= 0:
+            return ("output", "input")
+        else:
+            return ("input", "output")
+
+    def _get_port_coordinates(
+        self, node: CanvasNode, port: str, ox: float, oy: float
+    ) -> tuple[float, float]:
+        """Get the anchor point coordinates for a given port on a node.
+
+        Matches Thoughtorio's getPortCoordinates() logic:
+            input   → left edge, vertical center
+            output  → right edge, vertical center
+            top     → top edge, horizontal center
+            bottom  → bottom edge, horizontal center
+        """
+        if port == "input":
+            x = (node.x + ox) * self.scale
+            y = (node.y + node.height / 2 + oy) * self.scale
+        elif port == "output":
+            x = (node.x + node.width + ox) * self.scale
+            y = (node.y + node.height / 2 + oy) * self.scale
+        elif port == "top":
+            x = (node.x + node.width / 2 + ox) * self.scale
+            y = (node.y + oy) * self.scale
+        elif port == "bottom":
+            x = (node.x + node.width / 2 + ox) * self.scale
+            y = (node.y + node.height + oy) * self.scale
+        else:
+            # Fallback to output
+            x = (node.x + node.width + ox) * self.scale
+            y = (node.y + node.height / 2 + oy) * self.scale
+        return (x, y)
+
     def _draw_connections(self, draw: ImageDraw.ImageDraw, canvas: Canvas, ox: float, oy: float):
-        """Draw all connections between nodes."""
+        """Draw all connections between nodes.
+
+        Port selection is emergent from node geometry — if a target node
+        sits below a certain horizon from its source, the connection
+        automatically switches from side ports (horizontal tree) to
+        top/bottom ports (vertical tree).  This is ported from
+        Thoughtorio's ConnectionLine.svelte port logic.
+        """
         for source_id, target_id in canvas.all_connections():
             source = canvas.get_node(source_id)
             target = canvas.get_node(target_id)
             if not source or not target:
                 continue
 
-            # Connection from right edge of source to left edge of target
-            sx = (source.x + source.width + ox) * self.scale
-            sy = (source.y + source.height / 2 + oy) * self.scale
-            tx = (target.x + ox) * self.scale
-            ty = (target.y + target.height / 2 + oy) * self.scale
+            # Determine ports based on relative position (the key feature)
+            from_port, to_port = self._determine_port(source, target)
+
+            # Get anchor coordinates from the chosen ports
+            sx, sy = self._get_port_coordinates(source, from_port, ox, oy)
+            tx, ty = self._get_port_coordinates(target, to_port, ox, oy)
+
+            # Connection direction for bezier control points
+            is_vertical = from_port in ("top", "bottom")
 
             # Determine connection color based on source type
             style = source.get_style()
             conn_color = _darken(style.border_color, 0.7)
 
             # Draw bezier-like connection using line segments
-            self._draw_bezier_connection(draw, (sx, sy), (tx, ty), conn_color)
+            self._draw_bezier_connection(
+                draw, (sx, sy), (tx, ty), conn_color, direction="vertical" if is_vertical else "horizontal"
+            )
 
     def _draw_bezier_connection(
         self,
@@ -382,14 +472,38 @@ class CanvasRenderer:
         end: tuple[float, float],
         color: str,
         width: int = 2,
+        direction: str = "horizontal",
     ):
-        """Draw a smooth bezier-like connection between two points."""
+        """Draw a smooth bezier-like connection between two points.
+
+        Supports both horizontal and vertical flow directions, matching
+        Thoughtorio's ConnectionLine.svelte control point logic:
+          - horizontal: control points extend left/right (S-curve)
+          - vertical:   control points extend up/down (S-curve)
+        """
         sx, sy = start
         ex, ey = end
 
-        # Control points for a horizontal S-curve
-        dx = abs(ex - sx)
-        cp_offset = max(dx * 0.4, 40 * self.scale)
+        if direction == "vertical":
+            # Vertical S-curve: control points extend up/down
+            dy = abs(ey - sy)
+            cp_offset = max(dy * 0.4, 40 * self.scale)
+
+            # CP1 extends downward from start (if going down) or upward
+            cp1x = sx
+            cp1y = sy + (cp_offset if ey > sy else -cp_offset)
+            # CP2 extends upward toward end (if going down) or downward
+            cp2x = ex
+            cp2y = ey - (cp_offset if ey > sy else -cp_offset)
+        else:
+            # Horizontal S-curve: control points extend left/right
+            dx = abs(ex - sx)
+            cp_offset = max(dx * 0.4, 40 * self.scale)
+
+            cp1x = sx + (cp_offset if ex > sx else -cp_offset)
+            cp1y = sy
+            cp2x = ex - (cp_offset if ex > sx else -cp_offset)
+            cp2y = ey
 
         # Generate bezier points
         points = []
@@ -397,11 +511,6 @@ class CanvasRenderer:
         for i in range(steps + 1):
             t = i / steps
             # Cubic bezier
-            cp1x = sx + cp_offset
-            cp1y = sy
-            cp2x = ex - cp_offset
-            cp2y = ey
-
             x = (1-t)**3 * sx + 3*(1-t)**2*t * cp1x + 3*(1-t)*t**2 * cp2x + t**3 * ex
             y = (1-t)**3 * sy + 3*(1-t)**2*t * cp1y + 3*(1-t)*t**2 * cp2y + t**3 * ey
             points.append((x, y))
