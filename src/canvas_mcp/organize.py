@@ -16,6 +16,11 @@ are computed from their contents. Connections between nodes in different
 containers are resolved upward to container-level edges, so downstream
 flow relationships inform the layout at every level of the hierarchy.
 
+After hierarchical placement, a **connector-aware post-processing pass**
+checks whether any node's bounding box overlaps with a bezier connector
+path that doesn't involve that node. Overlapping nodes are nudged
+vertically to keep connector paths unobstructed.
+
 Spacing constants scaled up from Thoughtorio for larger, more legible nodes:
   - Nodes within machines: 90px horizontal, 140px vertical
   - Containers (machines/factories): 200px horizontal, 240px vertical
@@ -696,6 +701,304 @@ def _organize_network(
 
 
 # ---------------------------------------------------------------------------
+# Connector-aware post-processing
+# ---------------------------------------------------------------------------
+
+# Clearance between a connector path and the nearest node edge (in pixels).
+# Nodes are nudged by at least this much beyond the connector's extent.
+CONNECTOR_CLEARANCE = 20
+
+# Maximum iterations for the nudge loop (prevents infinite cycles when
+# nudging one node causes a new overlap with another connector).
+MAX_NUDGE_ITERATIONS = 6
+
+# Padding around a node's bounding box when testing for connector intersection.
+# A small negative value here means the connector must *actually enter* the
+# node rectangle (not just graze its edge) to count as a collision.
+NODE_BBOX_MARGIN = -8
+
+# Maximum total vertical displacement (in pixels) that a single node can
+# be shifted from its original position by the connector avoidance system.
+# Prevents nodes from being launched to extreme positions.
+MAX_NUDGE_DISPLACEMENT = 400
+
+
+@dataclass
+class _BezierSegment:
+    """A sampled point on a bezier connector path."""
+    x: float
+    y: float
+
+
+def _sample_bezier_path(
+    src: CanvasNode,
+    dst: CanvasNode,
+    steps: int = 20,
+) -> list[_BezierSegment]:
+    """Compute sampled points along the bezier connector between two nodes.
+
+    This mirrors the renderer's _draw_bezier_connection() logic so the
+    organizer can predict where connectors will be drawn without depending
+    on the renderer module.
+
+    Port selection uses the same "horizon" heuristic as renderer._determine_port().
+    """
+    # --- Port selection (mirrors renderer._determine_port) ---
+    src_cx = src.x + src.width / 2
+    src_cy = src.y + src.height / 2
+    tgt_cx = dst.x + dst.width / 2
+    tgt_cy = dst.y + dst.height / 2
+
+    dx = tgt_cx - src_cx
+    dy = tgt_cy - src_cy
+    horizon = src.height * 1.5
+
+    if abs(dy) > horizon and abs(dy) > abs(dx):
+        # Vertical connector
+        if dy > 0:
+            sx = src.x + src.width / 2
+            sy = src.y + src.height
+            ex = dst.x + dst.width / 2
+            ey = dst.y
+        else:
+            sx = src.x + src.width / 2
+            sy = src.y
+            ex = dst.x + dst.width / 2
+            ey = dst.y + dst.height
+        direction = "vertical"
+    else:
+        # Horizontal connector
+        if dx >= 0:
+            sx = src.x + src.width
+            sy = src.y + src.height / 2
+            ex = dst.x
+            ey = dst.y + dst.height / 2
+        else:
+            sx = src.x
+            sy = src.y + src.height / 2
+            ex = dst.x + dst.width
+            ey = dst.y + dst.height / 2
+        direction = "horizontal"
+
+    # --- Bezier control points (mirrors renderer._draw_bezier_connection) ---
+    if direction == "vertical":
+        cp_offset = max(abs(ey - sy) * 0.4, 40)
+        cp1x, cp1y = sx, sy + (cp_offset if ey > sy else -cp_offset)
+        cp2x, cp2y = ex, ey - (cp_offset if ey > sy else -cp_offset)
+    else:
+        cp_offset = max(abs(ex - sx) * 0.4, 40)
+        cp1x, cp1y = sx + (cp_offset if ex > sx else -cp_offset), sy
+        cp2x, cp2y = ex - (cp_offset if ex > sx else -cp_offset), ey
+
+    # --- Sample points along the cubic bezier ---
+    points: list[_BezierSegment] = []
+    for i in range(steps + 1):
+        t = i / steps
+        bx = ((1 - t) ** 3 * sx
+              + 3 * (1 - t) ** 2 * t * cp1x
+              + 3 * (1 - t) * t ** 2 * cp2x
+              + t ** 3 * ex)
+        by = ((1 - t) ** 3 * sy
+              + 3 * (1 - t) ** 2 * t * cp1y
+              + 3 * (1 - t) * t ** 2 * cp2y
+              + t ** 3 * ey)
+        points.append(_BezierSegment(x=bx, y=by))
+    return points
+
+
+def _node_intersects_path(
+    node: CanvasNode,
+    path: list[_BezierSegment],
+    margin: float = NODE_BBOX_MARGIN,
+) -> bool:
+    """Check if any sampled bezier point falls inside the node's bounding box.
+
+    A small negative margin means we only flag genuine overlaps, not
+    near-misses where the curve just barely touches the node edge.
+    """
+    x1 = node.x + margin
+    y1 = node.y + margin
+    x2 = node.x + node.width - margin
+    y2 = node.y + node.height - margin
+
+    for pt in path:
+        if x1 <= pt.x <= x2 and y1 <= pt.y <= y2:
+            return True
+    return False
+
+
+def _compute_nudge_direction(
+    node: CanvasNode,
+    path: list[_BezierSegment],
+) -> float:
+    """Determine whether to nudge the node up or down to clear the path.
+
+    We look at where the path's center-of-mass sits relative to the
+    node's center.  If the path passes mostly through the top half,
+    nudge the node down; if through the bottom half, nudge up.
+
+    Returns +1.0 for "move down" or -1.0 for "move up".
+    """
+    node_cy = node.y + node.height / 2
+
+    # Average y of path points that are inside the node's x-range
+    inside_ys = [
+        pt.y for pt in path
+        if node.x <= pt.x <= node.x + node.width
+    ]
+    if not inside_ys:
+        return 1.0  # default: move down
+
+    path_avg_y = sum(inside_ys) / len(inside_ys)
+    return 1.0 if path_avg_y <= node_cy else -1.0
+
+
+def _build_node_to_machine_map(canvas: Canvas) -> dict[str, str]:
+    """Build a lookup from node ID to the machine ID that contains it."""
+    mapping: dict[str, str] = {}
+    for network in canvas.networks:
+        for factory in network.factories:
+            for machine in factory.machines:
+                for node in machine.nodes:
+                    mapping[node.id] = machine.id
+    return mapping
+
+
+def _avoid_connectors(
+    canvas: Canvas,
+    clearance: float = CONNECTOR_CLEARANCE,
+    max_iterations: int = MAX_NUDGE_ITERATIONS,
+) -> int:
+    """Post-processing pass: nudge nodes so they don't overlap connector paths.
+
+    Algorithm:
+      1. For every connection (src, dst), sample the bezier path.
+      2. For every other node (not src or dst), check if the path
+         passes through the node's bounding box.
+      3. If it does, nudge the node vertically by enough to clear
+         the path, plus ``clearance`` pixels of breathing room.
+      4. Repeat until no overlaps remain or max_iterations is reached
+         (nudging one node can reveal a new overlap with a different
+         connector).
+
+    Machine-awareness: nodes within the same machine as the overlapping
+    node are nudged together (preserving machine cohesion). This prevents
+    the algorithm from scattering a machine's nodes across the canvas.
+
+    Returns the total number of nudges applied.
+    """
+    all_nodes = canvas.all_nodes()
+    connections = canvas.all_connections()
+
+    if not connections or len(all_nodes) < 3:
+        return 0
+
+    node_map: dict[str, CanvasNode] = {n.id: n for n in all_nodes}
+    node_to_machine = _build_node_to_machine_map(canvas)
+
+    # Build machine → node list lookup for group nudges
+    machine_nodes: dict[str, list[CanvasNode]] = {}
+    for network in canvas.networks:
+        for factory in network.factories:
+            for machine in factory.machines:
+                machine_nodes[machine.id] = list(machine.nodes)
+
+    # Record original positions so we can cap total displacement
+    original_y: dict[str, float] = {n.id: n.y for n in all_nodes}
+
+    total_nudges = 0
+
+    for iteration in range(max_iterations):
+        nudged_this_round: set[str] = set()
+
+        for src_id, dst_id in connections:
+            src = node_map.get(src_id)
+            dst = node_map.get(dst_id)
+            if not src or not dst:
+                continue
+
+            # Sample the bezier path for this connection
+            path = _sample_bezier_path(src, dst, steps=24)
+
+            # Check every node that is NOT an endpoint of this connection
+            for node in all_nodes:
+                if node.id == src_id or node.id == dst_id:
+                    continue
+                if node.id in nudged_this_round:
+                    continue
+
+                if _node_intersects_path(node, path):
+                    # Determine nudge direction and amount
+                    direction = _compute_nudge_direction(node, path)
+
+                    # Find the extent of the path within the node's x-range
+                    inside_ys = [
+                        pt.y for pt in path
+                        if node.x <= pt.x <= node.x + node.width
+                    ]
+                    if not inside_ys:
+                        continue
+
+                    if direction > 0:
+                        path_max_y = max(inside_ys)
+                        shift = path_max_y + clearance - node.y
+                        if shift <= 0:
+                            continue
+                    else:
+                        path_min_y = min(inside_ys)
+                        new_y = path_min_y - node.height - clearance
+                        shift = new_y - node.y
+                        if shift >= 0:
+                            continue
+
+                    # Cap total displacement from original position
+                    current_displacement = abs(node.y + shift - original_y[node.id])
+                    if current_displacement > MAX_NUDGE_DISPLACEMENT:
+                        # Clamp the shift so total displacement = MAX
+                        if shift > 0:
+                            shift = MAX_NUDGE_DISPLACEMENT - abs(node.y - original_y[node.id])
+                        else:
+                            shift = -(MAX_NUDGE_DISPLACEMENT - abs(node.y - original_y[node.id]))
+                        if abs(shift) < 5:
+                            continue  # negligible shift after clamping
+
+                    # Apply the shift to this node
+                    node.y = round(node.y + shift)
+                    nudged_this_round.add(node.id)
+                    total_nudges += 1
+
+                    # Also shift machine siblings that would otherwise
+                    # be leapfrogged (preserves ordering within machine).
+                    machine_id = node_to_machine.get(node.id)
+                    if machine_id:
+                        siblings = machine_nodes.get(machine_id, [])
+                        for sibling in siblings:
+                            if sibling.id == node.id:
+                                continue
+                            if sibling.id in nudged_this_round:
+                                continue
+
+                            # Only shift siblings that are in the direction
+                            # of the nudge AND would be overtaken
+                            sib_orig = original_y.get(sibling.id, sibling.y)
+                            sib_displacement = abs(sibling.y + shift - sib_orig)
+                            if sib_displacement > MAX_NUDGE_DISPLACEMENT:
+                                continue
+
+                            if direction > 0 and sibling.y >= node.y - shift:
+                                sibling.y = round(sibling.y + shift)
+                                nudged_this_round.add(sibling.id)
+                            elif direction < 0 and sibling.y <= node.y - shift:
+                                sibling.y = round(sibling.y + shift)
+                                nudged_this_round.add(sibling.id)
+
+        if not nudged_this_round:
+            break
+
+    return total_nudges
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -778,6 +1081,8 @@ def organize_canvas(
                     for node in net_nodes:
                         node.x += dx
                         node.y += dy
+        # Post-processing: avoid connector overlaps
+        _avoid_connectors(canvas)
         return
 
     # Multiple networks: build network-level organize items and use the
@@ -845,3 +1150,6 @@ def organize_canvas(
                 for node in machine.nodes:
                     node.x += dx
                     node.y += dy
+
+    # --- Post-processing: avoid connector overlaps ---
+    _avoid_connectors(canvas)
