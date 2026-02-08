@@ -91,6 +91,15 @@ async def list_tools() -> list[Tool]:
                         ),
                         "default": "container",
                     },
+                    "orientation": {
+                        "type": "string",
+                        "enum": ["horizontal", "vertical"],
+                        "description": (
+                            "Layout direction: 'horizontal' (left→right, default) "
+                            "or 'vertical' (top→bottom tree). Applied at all hierarchy levels."
+                        ),
+                        "default": "horizontal",
+                    },
                 },
                 "required": ["yaml_recipe"],
             },
@@ -166,6 +175,15 @@ async def list_tools() -> list[Tool]:
                         "description": "Spacing level for organize layout. Default: 'container'.",
                         "default": "container",
                     },
+                    "orientation": {
+                        "type": "string",
+                        "enum": ["horizontal", "vertical"],
+                        "description": (
+                            "Layout direction: 'horizontal' (left→right, default) "
+                            "or 'vertical' (top→bottom tree)."
+                        ),
+                        "default": "horizontal",
+                    },
                 },
                 "required": ["title", "nodes"],
             },
@@ -224,6 +242,7 @@ async def _render_canvas(args: dict) -> list[TextContent]:
 
     organize = args.get("organize", True)
     spacing_level = args.get("spacing_level", "container")
+    orientation = args.get("orientation", "horizontal")
 
     renderer = CanvasRenderer(scale=scale)
     output_path = str(OUTPUT_DIR / f"{filename}.png")
@@ -234,6 +253,7 @@ async def _render_canvas(args: dict) -> list[TextContent]:
             output_path=output_path,
             organize=organize,
             spacing_level=spacing_level,
+            orientation=orientation,
         )
     except Exception as e:
         return [TextContent(type="text", text=f"Rendering failed: {e}")]
@@ -248,6 +268,7 @@ async def _render_canvas(args: dict) -> list[TextContent]:
             "connections": len(canvas.all_connections()),
             "organized": organize,
             "spacing_level": spacing_level if organize else None,
+            "orientation": orientation if organize else None,
         }),
     )]
 
@@ -262,6 +283,7 @@ async def _create_canvas(args: dict) -> list[TextContent]:
     scale = args.get("scale", 2.0)
     organize = args.get("organize", True)
     spacing_level = args.get("spacing_level", "container")
+    orientation = args.get("orientation", "horizontal")
 
     # Build node objects
     nodes_by_id = {}
@@ -311,6 +333,7 @@ async def _create_canvas(args: dict) -> list[TextContent]:
             output_path=output_path,
             organize=organize,
             spacing_level=spacing_level,
+            orientation=orientation,
         )
     except Exception as e:
         return [TextContent(type="text", text=f"Rendering failed: {e}")]

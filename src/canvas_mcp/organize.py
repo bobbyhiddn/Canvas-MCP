@@ -407,6 +407,7 @@ def _organize_machine(
     all_connections: list[tuple[str, str]],
     start_x: float,
     start_y: float,
+    orientation: str = "horizontal",
 ) -> Optional[ContainerBounds]:
     """Organize nodes within a single machine.
 
@@ -441,7 +442,7 @@ def _organize_machine(
     ]
 
     options = OrganizeOptions(
-        orientation="horizontal",
+        orientation=orientation,
         horizontal_spacing=NODE_HORIZONTAL_SPACING,
         vertical_spacing=NODE_VERTICAL_SPACING,
         start_x=start_x + MACHINE_PADDING,
@@ -528,7 +529,7 @@ def _organize_factory(
 
     # --- Step 5: Layout machines within the factory ---
     options = OrganizeOptions(
-        orientation="horizontal",
+        orientation=orientation,
         horizontal_spacing=CONTAINER_HORIZONTAL_SPACING,
         vertical_spacing=CONTAINER_VERTICAL_SPACING,
         start_x=start_x + FACTORY_PADDING,

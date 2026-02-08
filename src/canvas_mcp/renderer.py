@@ -187,6 +187,7 @@ class CanvasRenderer:
         output_path: Optional[str] = None,
         organize: bool = False,
         spacing_level: str = "container",
+        orientation: str = "horizontal",
     ) -> bytes:
         """Render the canvas to PNG bytes. Optionally save to file.
 
@@ -196,12 +197,13 @@ class CanvasRenderer:
             organize: If True, apply Thoughtorio's organize algorithm for
                       automatic layout with breathing room.
             spacing_level: Spacing level for organize ("node", "container", "network").
+            orientation: Layout direction — "horizontal" or "vertical" (top→bottom).
         """
         # Auto-layout: always use Thoughtorio hierarchical organize by default.
         # The simple fallback only applies when organize is explicitly disabled
         # AND all nodes happen to be at (0,0).
         if organize:
-            organize_canvas(canvas, spacing_level=spacing_level)
+            organize_canvas(canvas, spacing_level=spacing_level, orientation=orientation)
         else:
             self._auto_layout_if_needed(canvas)
 
