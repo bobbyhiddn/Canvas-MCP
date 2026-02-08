@@ -48,7 +48,7 @@ class NodeStyle(BaseModel):
         icon:         Reserved for future icon support.
         corner_radius: Border radius in pixels.
     """
-    border_color: str = "#999"
+    border_color: str = "#999999"
     fill_color: str = "#1e1e2e"
     text_color: str = "#cdd6f4"
     label_color: Optional[str] = None
@@ -89,7 +89,7 @@ NODE_STYLES: dict[str, NodeStyle] = {
     "ai":       NodeStyle(border_color="#9C27B0"),  # Purple
     "source":   NodeStyle(border_color="#FF9800"),  # Orange
     "static":   NodeStyle(border_color="#4CAF50"),  # Green
-    "default":  NodeStyle(border_color="#999"),      # Gray
+    "default":  NodeStyle(border_color="#999999"),    # Gray
 }
 
 

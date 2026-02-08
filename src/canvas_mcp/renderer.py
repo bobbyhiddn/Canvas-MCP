@@ -47,8 +47,10 @@ def _load_bold_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
 # --- Color helpers ---
 
 def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
-    """Convert hex color to RGB tuple."""
+    """Convert hex color to RGB tuple. Supports both 3-char and 6-char hex."""
     hex_color = hex_color.lstrip("#")
+    if len(hex_color) == 3:
+        hex_color = hex_color[0]*2 + hex_color[1]*2 + hex_color[2]*2
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 
