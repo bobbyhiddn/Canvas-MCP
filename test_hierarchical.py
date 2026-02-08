@@ -208,7 +208,7 @@ def main():
     print(f"Factories: {sum(len(n.factories) for n in canvas.networks)}")
     print(f"Machines: {sum(len(f.machines) for n in canvas.networks for f in n.factories)}")
 
-    renderer = CanvasRenderer(scale=3.0)
+    renderer = CanvasRenderer(scale=2.0)
     output_path = "/home/bobbyhiddn/.rhode/canvas/rhode-architecture-hierarchical.png"
 
     try:

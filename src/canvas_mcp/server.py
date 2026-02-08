@@ -63,8 +63,8 @@ async def list_tools() -> list[Tool]:
                     },
                     "scale": {
                         "type": "number",
-                        "description": "Render scale factor (default 3.0 for crisp, legible output)",
-                        "default": 3.0,
+                        "description": "Render scale factor (default 2.0 for crisp, legible output)",
+                        "default": 2.0,
                     },
                     "filename": {
                         "type": "string",
@@ -159,8 +159,8 @@ async def list_tools() -> list[Tool]:
                     },
                     "scale": {
                         "type": "number",
-                        "description": "Render scale factor (default 3.0)",
-                        "default": 3.0,
+                        "description": "Render scale factor (default 2.0)",
+                        "default": 2.0,
                     },
                     "organize": {
                         "type": "boolean",
@@ -232,7 +232,7 @@ async def _render_canvas(args: dict) -> list[TextContent]:
     _ensure_output_dir()
 
     yaml_str = args["yaml_recipe"]
-    scale = args.get("scale", 3.0)
+    scale = args.get("scale", 2.0)
     filename = args.get("filename", str(uuid.uuid4())[:8])
 
     try:
@@ -280,7 +280,7 @@ async def _create_canvas(args: dict) -> list[TextContent]:
     title = args["title"]
     node_defs = args["nodes"]
     machine_defs = args.get("machines")
-    scale = args.get("scale", 3.0)
+    scale = args.get("scale", 2.0)
     organize = args.get("organize", True)
     spacing_level = args.get("spacing_level", "container")
     orientation = args.get("orientation", "horizontal")
