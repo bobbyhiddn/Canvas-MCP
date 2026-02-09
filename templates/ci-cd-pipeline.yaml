@@ -1,0 +1,131 @@
+canvas:
+  version: "2.0"
+  title: CI/CD Pipeline
+  networks:
+    - id: pipeline
+      label: CI/CD Pipeline
+      factories:
+        - id: source-stage
+          label: Source Control
+          machines:
+            - id: trigger-machine
+              label: Triggers
+              nodes:
+                - id: git-push
+                  type: input
+                  x: 0
+                  y: 0
+                  content: "Developer pushes to branch"
+                  label: Git Push
+                  outputs: [pr-check]
+                - id: pr-check
+                  type: decision
+                  x: 0
+                  y: 0
+                  content: "Is this a PR or main branch?"
+                  label: Branch Check
+                  inputs: [git-push]
+                  outputs: [lint, build]
+        - id: ci-stage
+          label: Continuous Integration
+          machines:
+            - id: quality-machine
+              label: Code Quality
+              nodes:
+                - id: lint
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Linting, formatting, static analysis"
+                  label: Lint & Format
+                  inputs: [pr-check]
+                  outputs: [unit-test]
+                - id: unit-test
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Unit tests with coverage report"
+                  label: Unit Tests
+                  inputs: [lint]
+                  outputs: [build]
+            - id: build-machine
+              label: Build Artifacts
+              nodes:
+                - id: build
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Compile, bundle, containerize"
+                  label: Build
+                  inputs: [pr-check, unit-test]
+                  outputs: [integration-test]
+                - id: integration-test
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Integration & E2E test suites"
+                  label: Integration Tests
+                  inputs: [build]
+                  outputs: [security-scan]
+        - id: security-stage
+          label: Security & Compliance
+          machines:
+            - id: scan-machine
+              label: Security Scanning
+              nodes:
+                - id: security-scan
+                  type: decision
+                  x: 0
+                  y: 0
+                  content: "CVE scan, SAST, dependency audit"
+                  label: Security Scan
+                  inputs: [integration-test]
+                  outputs: [gate]
+                - id: gate
+                  type: decision
+                  x: 0
+                  y: 0
+                  content: "All checks pass? Manual approval?"
+                  label: Release Gate
+                  inputs: [security-scan]
+                  outputs: [deploy-staging]
+        - id: cd-stage
+          label: Continuous Deployment
+          machines:
+            - id: staging-machine
+              label: Staging Environment
+              nodes:
+                - id: deploy-staging
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Deploy to staging environment"
+                  label: Deploy Staging
+                  inputs: [gate]
+                  outputs: [smoke-test]
+                - id: smoke-test
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Smoke tests & health checks"
+                  label: Smoke Tests
+                  inputs: [deploy-staging]
+                  outputs: [deploy-prod]
+            - id: prod-machine
+              label: Production
+              nodes:
+                - id: deploy-prod
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Rolling deploy to production"
+                  label: Deploy Production
+                  inputs: [smoke-test]
+                  outputs: [monitor]
+                - id: monitor
+                  type: output
+                  x: 0
+                  y: 0
+                  content: "Metrics, alerts, rollback triggers"
+                  label: Monitor & Alert
+                  inputs: [deploy-prod]

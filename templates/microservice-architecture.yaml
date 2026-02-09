@@ -1,0 +1,138 @@
+canvas:
+  version: "2.0"
+  title: Microservice Architecture
+  networks:
+    - id: system
+      label: Microservice System
+      factories:
+        - id: ingress
+          label: API Gateway & Ingress
+          machines:
+            - id: gateway
+              label: Gateway Layer
+              nodes:
+                - id: client
+                  type: input
+                  x: 0
+                  y: 0
+                  content: "Web / Mobile / CLI clients"
+                  label: Client
+                  outputs: [api-gateway]
+                - id: api-gateway
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Rate limiting, auth, routing"
+                  label: API Gateway
+                  inputs: [client]
+                  outputs: [auth-svc, user-svc, order-svc]
+        - id: services
+          label: Core Services
+          machines:
+            - id: auth-machine
+              label: Auth Service
+              nodes:
+                - id: auth-svc
+                  type: decision
+                  x: 0
+                  y: 0
+                  content: "JWT validation, OAuth2 flows"
+                  label: Auth Service
+                  inputs: [api-gateway]
+                  outputs: [auth-db]
+                - id: auth-db
+                  type: source
+                  x: 0
+                  y: 0
+                  content: "Credentials, tokens, sessions"
+                  label: Auth DB
+                  inputs: [auth-svc]
+            - id: user-machine
+              label: User Service
+              nodes:
+                - id: user-svc
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Profile CRUD, preferences"
+                  label: User Service
+                  inputs: [api-gateway]
+                  outputs: [user-db, event-bus]
+                - id: user-db
+                  type: source
+                  x: 0
+                  y: 0
+                  content: "User profiles, settings"
+                  label: User DB
+                  inputs: [user-svc]
+            - id: order-machine
+              label: Order Service
+              nodes:
+                - id: order-svc
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Order lifecycle management"
+                  label: Order Service
+                  inputs: [api-gateway]
+                  outputs: [order-db, event-bus]
+                - id: order-db
+                  type: source
+                  x: 0
+                  y: 0
+                  content: "Orders, line items, history"
+                  label: Order DB
+                  inputs: [order-svc]
+        - id: messaging
+          label: Event Bus & Async
+          machines:
+            - id: bus-machine
+              label: Message Bus
+              nodes:
+                - id: event-bus
+                  type: ai
+                  x: 0
+                  y: 0
+                  content: "Pub/sub event streaming"
+                  label: Event Bus
+                  inputs: [user-svc, order-svc]
+                  outputs: [notification-svc, analytics-svc]
+            - id: consumers
+              label: Event Consumers
+              nodes:
+                - id: notification-svc
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Email, SMS, push notifications"
+                  label: Notification Service
+                  inputs: [event-bus]
+                  outputs: [user-output]
+                - id: analytics-svc
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Metrics, dashboards, reports"
+                  label: Analytics Service
+                  inputs: [event-bus]
+                  outputs: [analytics-output]
+        - id: outputs
+          label: External Outputs
+          machines:
+            - id: output-machine
+              label: Delivery
+              nodes:
+                - id: user-output
+                  type: output
+                  x: 0
+                  y: 0
+                  content: "Notifications delivered to user"
+                  label: User Notifications
+                  inputs: [notification-svc]
+                - id: analytics-output
+                  type: output
+                  x: 0
+                  y: 0
+                  content: "Business intelligence dashboards"
+                  label: Analytics Dashboard
+                  inputs: [analytics-svc]

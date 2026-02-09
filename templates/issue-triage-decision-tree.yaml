@@ -1,0 +1,175 @@
+canvas:
+  version: "2.0"
+  title: Issue Triage Decision Tree
+  networks:
+    - id: decision-flow
+      label: Decision Flow
+      factories:
+        - id: intake
+          label: Problem Intake
+          machines:
+            - id: entry-machine
+              label: Entry Point
+              nodes:
+                - id: problem
+                  type: input
+                  x: 0
+                  y: 0
+                  content: "New issue or request arrives"
+                  label: Incoming Issue
+                  outputs: [is-urgent]
+        - id: triage
+          label: Triage & Classification
+          machines:
+            - id: urgency-machine
+              label: Urgency Check
+              nodes:
+                - id: is-urgent
+                  type: decision
+                  x: 0
+                  y: 0
+                  content: "Is this blocking production?"
+                  label: Urgent?
+                  inputs: [problem]
+                  outputs: [escalate, classify]
+            - id: escalation-machine
+              label: Escalation Path
+              nodes:
+                - id: escalate
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Page on-call, create incident"
+                  label: Escalate
+                  inputs: [is-urgent]
+                  outputs: [incident-output]
+            - id: classify-machine
+              label: Classification
+              nodes:
+                - id: classify
+                  type: decision
+                  x: 0
+                  y: 0
+                  content: "Bug, feature request, or question?"
+                  label: Classify Type
+                  inputs: [is-urgent]
+                  outputs: [is-bug, is-feature, is-question]
+        - id: routing
+          label: Handling Routes
+          machines:
+            - id: bug-machine
+              label: Bug Path
+              nodes:
+                - id: is-bug
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Reproduce, identify root cause"
+                  label: Investigate Bug
+                  inputs: [classify]
+                  outputs: [has-fix]
+                - id: has-fix
+                  type: decision
+                  x: 0
+                  y: 0
+                  content: "Is a fix known or straightforward?"
+                  label: Fix Known?
+                  inputs: [is-bug]
+                  outputs: [quick-fix, needs-research]
+                - id: quick-fix
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Apply patch, write regression test"
+                  label: Quick Fix
+                  inputs: [has-fix]
+                  outputs: [resolved-output]
+                - id: needs-research
+                  type: ai
+                  x: 0
+                  y: 0
+                  content: "Deep investigation, RFC if needed"
+                  label: Research & RFC
+                  inputs: [has-fix]
+                  outputs: [backlog-output]
+            - id: feature-machine
+              label: Feature Path
+              nodes:
+                - id: is-feature
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Evaluate scope and feasibility"
+                  label: Scope Feature
+                  inputs: [classify]
+                  outputs: [approved]
+                - id: approved
+                  type: decision
+                  x: 0
+                  y: 0
+                  content: "Approved for current cycle?"
+                  label: Approved?
+                  inputs: [is-feature]
+                  outputs: [schedule, backlog-output]
+                - id: schedule
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Add to sprint, assign owner"
+                  label: Schedule Work
+                  inputs: [approved]
+                  outputs: [resolved-output]
+            - id: question-machine
+              label: Question Path
+              nodes:
+                - id: is-question
+                  type: static
+                  x: 0
+                  y: 0
+                  content: "Check docs, FAQ, past tickets"
+                  label: Lookup Answer
+                  inputs: [classify]
+                  outputs: [has-answer]
+                - id: has-answer
+                  type: decision
+                  x: 0
+                  y: 0
+                  content: "Answer found in existing resources?"
+                  label: Answer Found?
+                  inputs: [is-question]
+                  outputs: [respond, needs-research]
+                - id: respond
+                  type: process
+                  x: 0
+                  y: 0
+                  content: "Send answer, update FAQ if new"
+                  label: Respond
+                  inputs: [has-answer]
+                  outputs: [resolved-output]
+        - id: outcomes
+          label: Outcomes
+          machines:
+            - id: outcome-machine
+              label: Resolution
+              nodes:
+                - id: incident-output
+                  type: output
+                  x: 0
+                  y: 0
+                  content: "Active incident — monitoring"
+                  label: Incident Created
+                  inputs: [escalate]
+                - id: resolved-output
+                  type: output
+                  x: 0
+                  y: 0
+                  content: "Issue resolved, ticket closed"
+                  label: Resolved
+                  inputs: [quick-fix, schedule, respond]
+                - id: backlog-output
+                  type: output
+                  x: 0
+                  y: 0
+                  content: "Added to backlog for future work"
+                  label: Backlogged
+                  inputs: [needs-research, approved]
