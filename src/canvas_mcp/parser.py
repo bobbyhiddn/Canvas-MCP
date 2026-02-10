@@ -139,6 +139,7 @@ def _parse_node(data: dict) -> CanvasNode:
         type=data.get("type", "default"),
         content=data.get("content", ""),
         label=data.get("label"),
+        icon=data.get("icon", ""),
         x=float(data.get("x", 0)),
         y=float(data.get("y", 0)),
         width=float(data.get("width", 250)),
@@ -204,6 +205,8 @@ def canvas_to_yaml(canvas: Canvas) -> str:
                     }
                     if node.label:
                         node_data["label"] = node.label
+                    if node.icon:
+                        node_data["icon"] = node.icon
                     if node.inputs:
                         node_data["inputs"] = node.inputs
                     if node.outputs:

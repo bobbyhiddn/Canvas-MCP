@@ -11,6 +11,7 @@ from typing import Optional
 from PIL import Image, ImageDraw, ImageFont
 
 from .models import Canvas, CanvasNode, CanvasFactory, CanvasMachine, ContainerStyle, NodeStyle
+from .icons import draw_icon, get_icon_names
 from .organize import organize_canvas
 
 
@@ -184,6 +185,8 @@ class CanvasRenderer:
     NODE_CONTENT_GAP = 10   # gap between label and content
     NODE_BOTTOM_PAD = 36    # room for type badge + padding at bottom
     NODE_LINE_HEIGHT = 24   # line height for body text
+    NODE_ICON_SIZE = 44     # icon bounding box size (unscaled)
+    NODE_ICON_PAD = 10      # padding around icon
 
     def __init__(self, scale: float = 1.0):
         self.scale = scale
@@ -238,8 +241,13 @@ class CanvasRenderer:
                 lw = lbbox[2] - lbbox[0]
                 content_width = max(content_width, lw)
 
-        # Final width: max of label, content, type badge, all + padding
-        inner_width = max(label_width, content_width, type_badge_w)
+        # Account for icon space — icon sits in the top-right of the node
+        icon_extra = 0
+        if node.icon:
+            icon_extra = self.NODE_ICON_SIZE + self.NODE_ICON_PAD
+
+        # Final width: max of label, content, type badge, all + padding + icon
+        inner_width = max(label_width + icon_extra, content_width, type_badge_w)
         width = inner_width + 2 * padding
         width = max(width, self.MIN_NODE_WIDTH)
         width = min(width, self.MAX_NODE_WIDTH)
@@ -260,6 +268,14 @@ class CanvasRenderer:
             height += len(content_lines) * line_height
 
         height += self.NODE_BOTTOM_PAD
+        # Ensure enough vertical space for icon
+        if node.icon:
+            min_icon_h = (
+                self.NODE_TOP_BAR + self.NODE_LABEL_GAP
+                + self.NODE_ICON_SIZE + self.NODE_ICON_PAD
+                + self.NODE_BOTTOM_PAD
+            )
+            height = max(height, min_icon_h)
         height = max(height, self.MIN_NODE_HEIGHT)
 
         return (float(round(width)), float(round(height)))
@@ -727,6 +743,14 @@ class CanvasRenderer:
                     fill="#a6adc8",
                     font=self.font_body,
                 )
+
+        # Icon — drawn in the top-right area of the node
+        if node.icon:
+            icon_size = int(self.NODE_ICON_SIZE * s)
+            icon_pad = int(self.NODE_ICON_PAD * s)
+            icon_cx = x + w - icon_size / 2 - icon_pad - int(2 * s)
+            icon_cy = y + int(self.NODE_TOP_BAR * s) + int(self.NODE_LABEL_GAP * s) + icon_size / 2
+            draw_icon(draw, node.icon, icon_cx, icon_cy, icon_size, style.border_color)
 
         # Type badge in bottom-right
         type_text = node.type

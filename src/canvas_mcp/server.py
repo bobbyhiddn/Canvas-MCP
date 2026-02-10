@@ -58,6 +58,10 @@ async def list_tools() -> list[Tool]:
                             "    inputs: [start]\n"
                             "\n"
                             "Node types: static, input, ai, source, output, decision, process, default\n"
+                            "Icons (optional per-node): cloud, aws, gcp, azure, server, vm, container, pod, lambda, "
+                            "loadbalancer, gateway, firewall, cdn, dns, database, objectstore, filesystem, cache, "
+                            "api, queue, monitoring, logs, search, brain, oracle, worker, bus, "
+                            "lock, key, globe, user, users, gear, bell, mail, network\n"
                             "Coordinates (x, y) are optional — auto-layout is applied if all are 0."
                         ),
                     },
@@ -132,6 +136,16 @@ async def list_tools() -> list[Tool]:
                                 },
                                 "content": {"type": "string", "description": "Text content of the node"},
                                 "label": {"type": "string", "description": "Display label (defaults to id)"},
+                                "icon": {
+                                    "type": "string",
+                                    "description": (
+                                        "Optional icon name for visual identification. "
+                                        "Available: cloud, aws, gcp, azure, server, vm, container, pod, lambda, "
+                                        "loadbalancer, gateway, firewall, cdn, dns, database, objectstore, "
+                                        "filesystem, cache, api, queue, monitoring, logs, search, brain, "
+                                        "oracle, worker, bus, lock, key, globe, user, users, gear, bell, mail, network"
+                                    ),
+                                },
                                 "inputs": {
                                     "type": "array",
                                     "items": {"type": "string"},
@@ -293,6 +307,7 @@ async def _create_canvas(args: dict) -> list[TextContent]:
             type=nd.get("type", "default"),
             content=nd.get("content", ""),
             label=nd.get("label"),
+            icon=nd.get("icon", ""),
             inputs=nd.get("inputs", []),
         )
         nodes_by_id[node.id] = node

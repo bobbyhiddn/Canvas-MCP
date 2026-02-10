@@ -1,0 +1,152 @@
+canvas:
+  version: "2.0"
+  title: Cloud Architecture (with Icons)
+  networks:
+    - id: production
+      label: Production Cloud
+      factories:
+        - id: frontend
+          label: Frontend Tier
+          machines:
+            - id: ingress
+              label: Ingress
+              nodes:
+                - id: users
+                  type: input
+                  icon: users
+                  content: "Web / Mobile / CLI clients"
+                  label: Users
+                  outputs: [cdn]
+                - id: cdn
+                  type: process
+                  icon: cdn
+                  content: "Static assets, edge caching"
+                  label: CDN
+                  inputs: [users]
+                  outputs: [lb]
+                - id: lb
+                  type: process
+                  icon: loadbalancer
+                  content: "Traffic distribution, health checks"
+                  label: Load Balancer
+                  inputs: [cdn]
+                  outputs: [fw]
+                - id: fw
+                  type: process
+                  icon: firewall
+                  content: "WAF rules, DDoS protection"
+                  label: Firewall
+                  inputs: [lb]
+                  outputs: [gateway]
+
+        - id: services
+          label: Service Tier
+          machines:
+            - id: api-machine
+              label: API Layer
+              nodes:
+                - id: gateway
+                  type: process
+                  icon: gateway
+                  content: "Auth, rate limiting, routing"
+                  label: API Gateway
+                  inputs: [fw]
+                  outputs: [api, auth]
+                - id: auth
+                  type: decision
+                  icon: lock
+                  content: "JWT validation, OAuth2"
+                  label: Auth Service
+                  inputs: [gateway]
+                  outputs: [auth-db]
+                - id: api
+                  type: ai
+                  icon: api
+                  content: "Core business logic"
+                  label: REST API
+                  inputs: [gateway]
+                  outputs: [db, cache, queue]
+
+            - id: workers-machine
+              label: Background Workers
+              nodes:
+                - id: queue
+                  type: process
+                  icon: queue
+                  content: "Redis / SQS job queue"
+                  label: Task Queue
+                  inputs: [api]
+                  outputs: [workers]
+                - id: workers
+                  type: process
+                  icon: worker
+                  content: "Async job processing"
+                  label: Workers
+                  inputs: [queue]
+                  outputs: [db, s3]
+                - id: fn
+                  type: process
+                  icon: lambda
+                  content: "Event-driven handlers"
+                  label: Lambdas
+                  inputs: [queue]
+                  outputs: [s3]
+
+        - id: data
+          label: Data Tier
+          machines:
+            - id: databases
+              label: Databases
+              nodes:
+                - id: db
+                  type: source
+                  icon: database
+                  content: "PostgreSQL — primary store"
+                  label: Database
+                  inputs: [api, workers]
+                - id: auth-db
+                  type: source
+                  icon: database
+                  content: "Auth credentials & sessions"
+                  label: Auth DB
+                  inputs: [auth]
+                - id: cache
+                  type: source
+                  icon: cache
+                  content: "Redis — sessions & queries"
+                  label: Cache
+                  inputs: [api]
+            - id: storage
+              label: Object Storage
+              nodes:
+                - id: s3
+                  type: source
+                  icon: objectstore
+                  content: "S3 — media & file storage"
+                  label: Object Store
+                  inputs: [workers, fn]
+
+        - id: ops
+          label: Operations
+          machines:
+            - id: observability
+              label: Observability Stack
+              nodes:
+                - id: monitoring
+                  type: output
+                  icon: monitoring
+                  content: "Grafana dashboards & metrics"
+                  label: Monitoring
+                  inputs: [api, workers]
+                - id: logs
+                  type: output
+                  icon: logs
+                  content: "ELK / Loki — log aggregation"
+                  label: Logs
+                  inputs: [api, workers]
+                - id: alerts
+                  type: output
+                  icon: bell
+                  content: "PagerDuty / Slack alerts"
+                  label: Alerts
+                  inputs: [monitoring]

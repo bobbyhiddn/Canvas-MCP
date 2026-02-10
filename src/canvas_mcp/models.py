@@ -134,6 +134,7 @@ class CanvasNode(BaseModel):
     type: str = "default"
     content: str = ""
     label: Optional[str] = None
+    icon: str = ""
     x: float = 0.0
     y: float = 0.0
     width: float = 360.0
