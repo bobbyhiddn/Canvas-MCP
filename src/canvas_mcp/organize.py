@@ -22,7 +22,7 @@ path that doesn't involve that node. Overlapping nodes are nudged
 vertically to keep connector paths unobstructed.
 
 Spacing constants:
-  - Nodes within machines: 90px horizontal, 140px vertical
+  - Nodes within machines: 90px horizontal, 200px vertical
   - Containers (machines/factories): 200px horizontal, 240px vertical
   - Networks: 260px horizontal, 320px vertical
 """
@@ -39,7 +39,7 @@ from .models import Canvas, CanvasNode, CanvasMachine, CanvasFactory, CanvasNetw
 # --- Spacing constants ---
 
 NODE_HORIZONTAL_SPACING = 90
-NODE_VERTICAL_SPACING = 140
+NODE_VERTICAL_SPACING = 200
 
 CONTAINER_HORIZONTAL_SPACING = 200
 CONTAINER_VERTICAL_SPACING = 240
@@ -52,7 +52,7 @@ MACHINE_PADDING = 55
 FACTORY_PADDING = 75
 NETWORK_PADDING = 100
 
-GRID_COLUMNS_NODE = 4
+GRID_COLUMNS_NODE = 3
 GRID_COLUMNS_CONTAINER = 3
 
 
@@ -197,10 +197,13 @@ def compute_organized_layout(
         ordered = sorted(items, key=lambda it: (it.y, it.x))
         for idx, item in enumerate(ordered):
             if orientation == "horizontal":
-                col = idx // grid_columns
+                # Distribute across columns (levels), not rows.
+                # idx % grid_columns gives column 0,1,2,...  so nodes
+                # spread horizontally instead of all piling into col 0.
+                col = idx % grid_columns
                 effective_levels[item.id] = col
             else:
-                row = idx // grid_columns
+                row = idx % grid_columns
                 effective_levels[item.id] = row
 
     # --- Step 6: Group items by level ---
