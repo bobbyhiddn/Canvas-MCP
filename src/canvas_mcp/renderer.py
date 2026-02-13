@@ -350,6 +350,16 @@ class CanvasRenderer:
         for node in canvas.all_nodes():
             self._draw_node(draw, node, ox, oy)
 
+        # Downscale if either dimension exceeds the Claude API limit (8000px).
+        # This prevents "image dimensions exceed max allowed size" errors when
+        # MCP tool results are sent back to the Claude conversation.
+        MAX_DIMENSION = 8000
+        if img.width > MAX_DIMENSION or img.height > MAX_DIMENSION:
+            scale_factor = min(MAX_DIMENSION / img.width, MAX_DIMENSION / img.height)
+            new_w = int(img.width * scale_factor)
+            new_h = int(img.height * scale_factor)
+            img = img.resize((new_w, new_h), Image.LANCZOS)
+
         # Convert to bytes
         buf = BytesIO()
         img.save(buf, format="PNG", optimize=True)
