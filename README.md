@@ -282,4 +282,4 @@ Canvas-MCP uses the **Catppuccin Mocha** dark theme throughout:
 
 ## License
 
-MIT
+Copyright (c) 2026 Micah Longmire. All rights reserved. See [LICENSE](LICENSE).
